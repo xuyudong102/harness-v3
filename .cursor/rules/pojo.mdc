@@ -1,0 +1,30 @@
+---
+description: POJO 字段设计规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# POJO 规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+### POJO 类规则
+
+- **布尔属性禁止加 `is` 前缀** — `private Boolean deleted` 而非 `private Boolean isDeleted`，框架反序列化会解析为属性名 `deleted` 导致获取不到
+- **属性必须使用包装数据类型** — `Long`/`Integer`/`Boolean` 而非 `long`/`int`/`boolean`，数据库查询结果可能 null，自动拆箱 NPE
+- **RPC 方法参数和返回值必须使用包装类型**
+- **局部变量推荐使用基本数据类型**
+- **禁止设定任何属性默认值** — 如 `createTime = new Date()` 可能在更新其他字段时被意外覆盖
+- **必须写 toString 方法** — 继承时前面加 `super.toString()`
+- **禁止同时存在 `isXxx()` 和 `getXxx()`** — 框架无法确定优先调用哪个
+- **serialVersionUID 新增属性时不要修改** — 避免反序列化失败；完全不兼容升级才修改
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

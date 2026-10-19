@@ -1,0 +1,30 @@
+---
+description: b2cmall buyer/tenant OpenAPI 与 Apifox 配置发现、文档分支隔离；在 B2C 接口同步时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall Apifox 契约映射
+
+## 适用范围
+
+- B2C 买家端、卖家端的 Swagger/OpenAPI 发现、预览、导入或一致性验证。
+- 同步使用 `.cursor/skills/apifox-openapi-sync/SKILL.md`，本资源仅记录项目映射。
+
+## 强制规则
+
+- 同一 `B2C 商城` Apifox 项目承载两端；团队及项目 ID 以项目配置和实时查询为准。
+- buyer 使用 `references/projects/b2c-buyer.json`（skill 目录内），文档分支 `main`；tenant 使用 `references/projects/b2c-tenant.json`，文档分支 `tenant`。
+- 两端存在同名 Schema；必须保持文档分支隔离，不把两份完整 service 导入同一分支，也不手动改写 Schema、operationId 或引用。
+- 命令分别传 `--project b2c-buyer` / `--project b2c-tenant`；服务目录命名空间分别为 `buyer-orch-server` / `tenant-orch-server`。
+- DEV Gateway、Swagger/OpenAPI URL 与 Base URL 只从 `~/.harness/runtime/profiles/b2cmall/dev.json` 读取；项目配置通过 `runtime.environmentProfiles` 绑定，不复制易变地址。先读实际 Swagger 配置，通过真实 group 链接验证 OpenAPI 文档；未验证的候选不得视为有效来源。
+- buyer 初始提供的 `http://10.7.86.12:30011/doc.html` 本次不可达，不能作为有效 JSON 源；恢复后先核对真实 group 和契约，才调整配置。
+- 两端真实路径分别为 `/admin-api/orch-layer/buyer/` 和 `/admin-api/orch-layer/tenant/`；禁止写入前端代理 `/buyer-api/`、`/tenant-api/`。
+- 部署 OpenAPI 缺少本地新接口时，标记待部署后同步；不要用路由骨架或手写契约冒充本地真实 OpenAPI。
+- 新建项目及初始化授权不扩展到其他项目、无关接口删除或权限开关调整。
+
+## 验证清单
+
+- 配置 strict validation、只读 diff 和目标 branch 核对通过。
+- 导入后回读 service 目录、method/path 集合、操作数、环境绑定及代表接口的字段。
+- 两端归属清楚；新接口是否已同步以实际来源与回读为准。

@@ -1,0 +1,46 @@
+---
+description: broker 多仓库工作区、构建与证据来源事实；在处理 broker 仓库或 broker 路径下的调查、修改、验证时使用
+globs:
+alwaysApply: false
+---
+
+# broker 仓库与证据来源
+
+## 适用范围
+
+- 当前文件或工作区路径属于 broker 后端多仓库工作区时适用。
+- 本规则只记录仓库事实和证据入口。编码约束仍以本项目作用域内的其他规则为准，通用 Skill 不内置这些事实。
+
+## 强制规则
+
+- 工作区是多仓库目录，不是单一 Git 仓库。路径：`projects/mall/repos/b2b/backend/broker`。变更、分支和提交都落在拥有 `.git` 的子仓库。
+- 平台 `AGENTS.md` 列出的主仓库为 `broker-biz-framework`、`broker-common-framework`、`broker-dependencies`、`broker-gateways`、`broker-modules-api`、`broker-modules-biz`、`broker-orch`、`broker-scheduler-biz`。`common-modules/` 下还有独立 Git 仓库，包括支付与云商客户端；不要把平台清单当成全部仓库。
+- 构建系统是 Maven。BOM 为 `broker-dependencies`，`groupId` 为 `com.broker.platform`。在目标子仓库内选择最窄的 `mvn` 命令。
+- 分支以该子仓库的 `git status` 为准，不要用通用 `feature/` + `develop` 示例覆盖现场。盘点时这些后端仓库集中在 `feature-2.5.3.0`。
+- 业务包根为 `com.broker`。登录与租户工具类以本项目上下文规则为准，不要改用 `com.yunshang` 或 `com.b2cmall`。
+- API 事实优先读工作区 `.apifox/settings.json` 的 `projectId`，再读代码中的接口注解。本机 Codex 没有独立 Swagger MCP。
+- broker Apifox 项目为「经纪平台」（project `8770513`，team `207638`）。接口目录按 Swagger group 保持 `business-backend-orch-server`、`business-frontend-orch-server`、`operate-orch-server`、`agent-orch-server`、`portal-orch-server` 五个服务根目录；正式接口 Path 只使用 Swagger 的 `/admin-api/...`，不带 `/api-business-*`、`/api-operate` 或 `/api-portal` 前端代理前缀。
+- 当前 DEV/SIT 的 Kubernetes、Nacos、Swagger/OpenAPI、Apifox Base URL 与 CodeArts 部署映射读取 `~/.harness/runtime/profiles/broker/<dev|sit>.json`。旧 `192.168.3.25` Swagger 入口已失效，不能作为活动来源或替换 IP 的模板；Profile 缺少新入口时说明缺口。Swagger UI 不是 OpenAPI，实际接口定义必须读已验证的 spec。
+- broker DEV 常规请求 Header 为 `tenant_id=2041791973362192386`、`platform-type=2` 与有效 mock `Authorization: Bearer <token>`；目标租户为「北京达程泰合科技有限责任公司」。短期 token 不写入 Rule、Git、日志或报告。
+- DEV mock 规则以 `TokenAuthenticationFilter#mockLoginUser` 和当前 DEV 配置为准：`token = mockSecret + tenantId + ":" + companyId + ":" + userId + ":" + platformType`。优先从本机非版本化 `/Users/xuyudong/Workspace/ai/personal/.env.local` 的 `BROKER_DEV_MOCK_TOKEN_PLATFORM_2` 读取现成值；需要重建时，从 Nacos 只读确认 `broker.security.mock-enable/mock-secret`，并按目标租户与有效 DEV 用户解析 companyId/userId。不得凭默认值猜测在线配置。
+- 普通 DEV 直连默认不带 `tag`。`tag` 只在将请求定向到个人本机注册实例时使用，并取该实例在 Nacos 中的真实 metadata / routing convention；不得把个人机器 tag 固化为共享 DEV 环境参数。
+- broker 接口同步选择本次变更所属 service，配置中的 Path 约束为 `/admin-api/`。同步粒度、identity collision、read-back 与 stale endpoint 处理以 `apifox-openapi-sync` 为准；不另行重写 operationId/schema，不自动删除旧定义，不清空项目或改动无关环境 Header、测试资产。
+- 同步别名：`portal` → `portal-orch`，`frontend` → `business-frontend-orch`，`backend` → `business-backend-orch`，`operate` → `operate-orch`，`agent` → `agent-orch`。通用同步方法在 `apifox-openapi-sync`，不把这组映射写进通用 Skill 正文。
+- 多站点只扩展首页轮播。挂牌轮播保持原有语义。首页轮播排序范围至少是 tenant + site + banner type。普通租户不因 siteId 改造改变原行为。展示回退分三态：从未配置则用全国站；本站有启用项则用本站；配置过但全部停用则返回空，不回退。
+- 地方站删除是生命周期操作，不只删站点行。需要同时清理部门绑定、市场用户关系、商品关系和站点轮播。全国站不可删除。
+- 市场推广的部门关系通过 `site_id`。主动解绑必须清空关系。disabled、deleted 和显式 unbind 是三种语义。推广保存和站点删除共享同一并发边界：当前实现是租户级分布式锁加业务库本地事务。这不表示禁止 `FOR UPDATE`。
+- 公开站点图标从临时公开上传进入业务提交，再固化为正式公开资源并保存文件关系，公开接口返回匿名可访问 URL。默认图标和自定义图标使用不同契约。
+- 覆盖地区使用系统行政区主数据。省级 code 先规范成同一种表示，再存储和比较。
+- Nacos 只读入口为 `nacos-read` Skill / CLI，显式选择 `platform=broker` 与 DEV/SIT。地址、Nacos Namespace、Group 和私有认证文件引用来自既有 Environment Profile；只查询健康、配置摘要/差异和服务。缺失 Profile 字段时停止，不回退旧 MCP，不把账号、口令或配置正文写入日志/制品。
+- 数据库、Redis、ES 入口是 Codex MCP `dbx`，只选择名称以 `经纪商-` 开头的连接。本机没有日志或中间件聚合 MCP，也没有缺陷系统 MCP。日志只在当前宿主已经启用 Loki 时查询；没有该入口时停止并说明缺失。
+- 代码结构入口是 Codex MCP `codegraph`。DEV 构建入口见本项目 CodeArts 规则，profile 为 `broker`。
+- Cursor 用户级 `~/.cursor/mcp.json` 为空，业务工作区只有 MCP 模板、没有启用中的 `mcp.json`。Cursor 会话未启用上述 server 时，不得把 Codex 配置当成已经连接，也不得改读云商或 B2C 连接。
+- 本机启动 DEV 依赖时遵循平台 `AGENTS.md`：解析 `dev-local.env`，不打印其中的值。
+- 验证命令按目标子仓库的 `pom.xml` 选择。`broker-dependencies` 的 BOM 未声明 JaCoCo 时，不要声称覆盖率门禁已经接入。
+
+## 验证清单
+
+- 已确认当前路径属于 broker，且没有读取云商项目事实或 `云商-` 数据连接。
+- 仓库、分支和模块来自当前 Git 与 `pom.xml`，不是从通用 Skill 推断。
+- 外部事实只来自上述只读入口；不可用时明确降级，不编造配置、日志或接口。
+- Apifox 同步已核对目标 Swagger group、DEV Base URL、`/admin-api` Path、服务目录和增量边界；任何 mock token 都只存在于非版本化本地配置或 Apifox 环境中。

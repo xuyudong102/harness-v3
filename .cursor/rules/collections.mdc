@@ -1,0 +1,101 @@
+---
+description: 集合处理规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 集合处理规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 涉及批量业务时，优先使用批量接口/批量查询/批量删除，禁止在循环中逐条调用远程接口；若下游暂无批量接口，必须集中封装循环并记录批次日志（count、耗时、失败项）
+- 创建子订单必须走批量创建接口，禁止在编排层循环调用 `createOrder` 一条条落库
+- 循环体内涉及编号生成、下游查询、远程写入等调用时，必须先在循环外批量预取结果，再在循环内按索引消费，禁止边循环边调远程接口
+
+- `addAll()` 前须判断入参集合是否为 null
+- 利用 Set 去重，避免用 List.contains() 遍历判断
+- 集合初始化时指定大小，避免频繁扩容
+
+### 集合判空
+
+- **用 `isEmpty()` 判断是否为空** — 不用 `size() == 0`，某些集合 `isEmpty()` 为 O(1)
+
+### Collectors.toMap 两大陷阱
+
+- **必须传 mergeFunction** — 否则 key 重复直接抛 `IllegalStateException`
+- **value 为 null 时抛 NPE** — HashMap.merge 内部对 null value 抛 NullPointerException
+
+```java
+// ✅ 正确用法
+Map<String, Double> map = list.stream()
+    .collect(Collectors.toMap(Pair::getKey, Pair::getValue, (v1, v2) -> v2));
+
+// ❌ 缺少 mergeFunction，key 重复直接异常
+Map<String, Double> map = list.stream()
+    .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+```
+
+### foreach 中禁止 remove/add
+
+- 使用 Iterator 方式删除元素，并发场景需对 iterator 加锁
+- 禁止在 for-each 循环中直接 `list.remove(item)`，会抛 `ConcurrentModificationException`
+
+### 集合转数组
+
+- **必须用 `toArray(new T[0])`** — 无参 `toArray()` 返回 `Object[]`，强转会 `ClassCastException`
+- 传入长度为 0 的空数组性能最优
+
+### subList 注意事项
+
+- `subList` 返回的是原列表的视图，不可强转为 `ArrayList`
+- 对父集合的增删会导致子列表遍历抛 `ConcurrentModificationException`
+
+### 不可变集合
+
+- `Collections.emptyList()`、`singletonList()` 等返回的是不可变集合，不可 add/remove/clear
+- `Arrays.asList()` 返回的列表不支持 add/remove，且底层仍是原数组
+
+### Comparator 三条件
+
+实现 `Comparator` 必须满足：
+1. `compare(x, y)` 和 `compare(y, x)` 结果相反
+2. 传递性：`x > y` 且 `y > z` 则 `x > z`
+3. 相等一致性：`x = y` 则 `compare(x, z)` 和 `compare(y, z)` 结果相同
+
+```java
+// ❌ 缺少相等处理，违反条件 1
+return o1.getId() > o2.getId() ? 1 : -1;
+
+// ✅ 正确
+return Integer.compare(o1.getId(), o2.getId());
+```
+
+### 泛型
+
+- `<? extends T>` 不能 add，`<? super T>` 不能 get（PECS 原则）
+- 无泛型集合赋值给泛型集合后，使用元素前须 `instanceof` 检查
+
+### HashMap 初始容量
+
+- **初始化时指定容量** — `initialCapacity = (需要存储的元素个数 / 0.75) + 1`
+- 暂时无法确定大小时设为 16（默认值）
+- 遍历 Map 用 `entrySet()` 或 `Map.forEach`，不用 `keySet()` 二次查找
+
+### Map null 值注意
+
+| 集合类 | Key null | Value null |
+|--------|----------|------------|
+| HashMap | 允许 | 允许 |
+| ConcurrentHashMap | 不允许 | 不允许 |
+| TreeMap | 不允许 | 允许 |
+| Hashtable | 不允许 | 不允许 |
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

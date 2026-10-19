@@ -1,0 +1,27 @@
+{
+  "_description": "Harness Cursor Hooks：beforeSubmitPrompt 只提供简短 Rule 发现索引；preToolUse 执行确定性安全检查。",
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/handle-session-start.mjs",
+        "_comment": "新会话清理过期注入状态"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node .cursor/hooks/handle-before-submit.mjs",
+        "matcher": "UserPromptSubmit",
+        "_comment": "编码消息前只注入简短 Rule 路径索引，不注入正文"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .cursor/hooks/handle-pre-tool-use.mjs",
+        "matcher": "Write|StrReplace|ApplyPatch|EditNotebook|Edit|Shell|RunCommand|Terminal|Bash",
+        "failClosed": true,
+        "_comment": "安全 safety net：普通 DEV/SIT 放行，明确只读、PRE/PROD 变更和常见破坏性命令 deny；故障时给恢复提示并 fail-closed"
+      }
+    ]
+  }
+}

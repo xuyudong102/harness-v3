@@ -1,0 +1,97 @@
+---
+description: 检测重复纠正并生成 Rule 固化候选；在所有 Agent 任务执行时持续生效
+globs:
+alwaysApply: false
+---
+
+# 纠正检测
+
+## 适用范围
+
+- 适用于所有 Agent 任务中的用户纠正识别与规则候选生成。
+- 只处理可复现、可泛化的重复纠正，不处理一次性偏好或当前任务临时决定。
+
+## 强制规则
+
+### 监听信号
+
+- 检测“我说过”“又犯了”“之前提过”“第 N 次了”等重复纠正信号。
+- 检测“不是这样”“你又……”“重复了”等明确否定和重复错误描述。
+
+### 触发条件
+
+- 必须具有至少两次同类错误证据。
+- 两次证据必须指向同一可泛化约束，而不是表面关键词相似。
+- 只有一次证据时记录当前任务决策，不启动 Rule 固化。
+
+### 候选生成流程
+
+1. 提取两次以上纠正证据，生成稳定候选 ID。
+2. 根据分类映射确定目标 Rule 和目标语义章节。
+3. 检查现有 Rule 是否已经覆盖候选，禁止重复固化。
+4. 检查候选是否与现有约束冲突或扩大适用范围。
+5. 生成 `{artifact_root}/workflow/memory-change.md`，状态为 `PENDING`。
+6. 进入人工检查点，等待用户给出 `APPROVED` 或 `REJECTED`。
+7. 只有 `APPROVED` 候选才能交给 `memory-consolidator` 写入。
+
+### 分类映射表
+
+| 纠正类别 | 目标文件 |
+|---|---|
+| 命名 | `naming.mdc` |
+| 枚举类型设计 | `enums.mdc` |
+| 常量组织/魔法值 | `constants.mdc` |
+| 异常处理 | `exceptions.mdc` |
+| 日志 | `logging.mdc` |
+| 空值 | `null-safety.mdc` |
+| 方法设计 | `method-design.mdc` |
+| 注释 | `comments.mdc` |
+| 数据库 | `database.mdc` |
+| API | `api-design.mdc` |
+| 错误码 | `error-codes.mdc` |
+| 设计规约 | `design-doc.mdc` |
+| 测试 | `testing.mdc` |
+| 集合处理 | `collections.mdc` |
+| 并发处理 | `concurrency.mdc` |
+| 日期时间 | `datetime.mdc` |
+| POJO 字段定义 | `pojo.mdc` |
+| OOP/继承/访问控制/equals | `oop.mdc` |
+| 数值类型/BigDecimal/浮点 | `numeric.mdc` |
+| 依赖管理 | `dependencies.mdc` |
+| 项目架构/分层 | `project-architecture.mdc` |
+| 微服务/模块规划 | `microservice.mdc` |
+| 应用安全 | `security.mdc` |
+| Redis 缓存 | `redis.mdc` |
+| OBS/对象存储 | `obs.mdc` |
+| 代码格式 | `code-style-format.mdc` |
+| 控制语句 | `control-flow.mdc` |
+| 消息队列 | `message-queue.mdc` |
+| ORM/MyBatis | `mybatis.mdc` |
+| 多租户隔离 | `tenant-isolation.mdc` |
+| Schema/Entity 一致性 | `schema-guard.mdc` |
+| Java 编辑自检 | `java-edit-self-check.mdc` |
+| Git 分支 | `git-branch.mdc` |
+| Git 提交 | `git-commit.mdc` |
+| Git 仓库卫生 | `repository-hygiene.mdc` |
+| 变更实施流程 | `change-implementation.mdc` |
+| 任务拆解 | `task-decomposition.mdc` |
+| 阶段契约 | `stage-contracts.mdc` |
+| MCP 配置/引用 | `mcp.mdc` |
+| ER 图绘制 | `er-diagram.mdc` |
+| 规则交叉引用 | `cross-ref-guard.mdc` |
+| 无法归类 | 提出新 `<topic>.mdc`，等待人工批准 |
+
+## 禁止事项
+
+- 禁止直接修改任何 `.mdc`。
+- 禁止把候选追加到 Rule 文件末尾或创建“补充规则”章节。
+- 禁止根据一次纠正固化长期规则。
+- 禁止在无法确定目标章节、存在冲突或证据不足时默认批准。
+- 禁止把项目特化纠正写入通用 Rule。
+
+## 验证清单
+
+- 候选包含两次以上可核对证据。
+- `memory-change.md` 包含目标文件、目标章节、拟议差异和影响检查。
+- 未获批准时没有 Rule 文件发生变化。
+- 获批后的实际写入由 `memory-consolidator` 完成。

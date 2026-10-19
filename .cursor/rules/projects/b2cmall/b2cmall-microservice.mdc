@@ -1,0 +1,52 @@
+---
+description: b2cmall 项目微服务模块体系（b2cmall-* / zfn-platform-framework）；在处理匹配文件或相关任务时使用
+globs: "**/b2cmall-*/pom.xml,**/b2cmall-modules-biz/**/*Application.java,**/b2cmall-orch/**/*Application.java,**/b2cmall-gateways/**/*Application.java"
+alwaysApply: false
+---
+
+# b2cmall 微服务模块结构
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/b2cmall-*/pom.xml,**/b2cmall-modules-biz/**/*Application.java,**/b2cmall-orch/**/*Application.java,**/b2cmall-gateways/**/*Application.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 涉及模块命名时一律使用 `b2cmall-*` 前缀；框架层使用 `zfn-platform-framework` / `com.zfn.platform` 坐标
+
+### 顶层模块体系
+
+| 模块 | 职责 |
+|---|---|
+| `b2cmall-modules-api` | 各业务能力 Feign 契约 + DTO + `ErrorCodeConstants`（`b2cmall-module-*-api`） |
+| `b2cmall-modules-biz` | 各业务能力实现（`b2cmall-module-*-biz`，与 api 一一配对） |
+| `b2cmall-orch` | 编排/接入层 HTTP 入口（`b2cmall-buyer-orch`、`b2cmall-admin-orch`、`b2cmall-tenant-orch`、`b2cmall-api-orch`） |
+| `b2cmall-gateways` | Spring Cloud Gateway 边缘层 |
+| `zfn-platform-framework` | 平台框架 starter 与公共类（`zfn-spring-boot-starter-*`、`com.zfn.framework.*`） |
+
+### 编排层服务对照
+
+| Maven 模块 | Nacos 服务名 | 端口 | 职责 |
+|---|---|---|---|
+| `b2cmall-buyer-orch` | `buyer-orch-server` | 59812 | C 端买家中心 |
+| `b2cmall-admin-orch` | `admin-orch-server` | 59814 | 商家/平台后台 |
+| `b2cmall-tenant-orch` | `tenant-orch-server` | — | SaaS 租户侧编排 |
+| `b2cmall-api-orch` | `api-orch-server` | — | 开放/回调 |
+| `b2cmall-business-frontend-orch` | — | 59810 | **已废弃**，禁止新增 |
+
+### 业务能力模块（api 与 biz 一一配对）
+
+`auth`、`system`（base）、`user`、`operate-user`、`tenant`、`product`、`trade`、`marketing`、`content`、`logistics` 等。
+
+### 约束
+
+- 公共 VO/DTO/Exception/Enums 禁止在多个微服务包下重复定义；公共能力下沉到 `zfn-platform-framework`
+- pom 采用**最小依赖原则**；子模块依赖不写版本号，版本由 BOM / `${revision}` / `${b2cmall.api.version}` 统一管理
+- 根 `pom.xml` 默认 `maven.test.skip=true`；执行测试须显式 `-Dmaven.test.skip=false` 或 `verify`
+- `zfn-financial` 不在根 reactor 内，除非任务明确要求，否则不纳入 b2cmall 变更范围
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

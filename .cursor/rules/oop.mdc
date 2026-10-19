@@ -1,0 +1,55 @@
+---
+description: Java OOP（面向对象）规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# OOP 规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- ⚠️ 禁止强制类型转换（强转）：禁止在业务代码中使用 `(Type)` 对对象做强转；必须通过泛型约束、明确返回类型或适配转换方法消除强转需求
+
+### 访问控制
+
+- 工具类构造方法必须 private
+- 类非 static 成员变量：本类用 private，子类共享用 protected
+- static 成员变量仅本类用必须 private，考虑是否 final
+- 类成员方法只供内部调用必须 private
+
+### 覆写规则
+
+- **所有覆写方法加 `@Override`** — 防止 `getObject()` 和 `get0bject()` 混淆
+- 过时接口加 `@Deprecated` 并说明替代方案
+- 禁止使用过时类或方法
+
+### equals 与 hashCode
+
+#### equals 调用
+
+- **用常量或确定有值的对象调用** — `"test".equals(param)` 防止 param 为 null 时 NPE
+- 推荐 `java.util.Objects#equals(Object a, Object b)`
+
+#### hashCode 与 equals 一致性
+
+- 覆写 equals 就必须覆写 hashCode
+- Set 存储的对象必须覆写 hashCode 和 equals
+- 自定义对象作为 Map 的 key 必须覆写 hashCode 和 equals
+
+### 其他 OOP 规则
+
+- 静态变量/方法直接用类名访问，不通过对象引用
+- 可变参数放在参数列表最后，类型避免 Object
+- 外部调用的接口不允许修改方法签名
+- 构造方法禁止业务逻辑，初始化放 init 方法
+- `final` 用于不允许继承的类、不允许修改的引用、不允许覆写的方法、不允许重新赋值的局部变量
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

@@ -1,0 +1,136 @@
+{
+  "schema": "apifox-openapi-project/v1",
+  "project": {
+    "label": "broker",
+    "name": "经纪平台",
+    "apifoxProjectId": "8770513",
+    "teamId": "207638",
+    "branch": "main"
+  },
+  "services": [
+    {
+      "name": "portal-orch",
+      "aliases": [
+        "portal"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "portal-orch-server",
+      "environment": "dev-portal"
+    },
+    {
+      "name": "business-frontend-orch",
+      "aliases": [
+        "frontend"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "business-frontend-orch-server",
+      "environment": "dev-frontend"
+    },
+    {
+      "name": "business-backend-orch",
+      "aliases": [
+        "backend"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "business-backend-orch-server",
+      "environment": "dev-backend"
+    },
+    {
+      "name": "operate-orch",
+      "aliases": [
+        "operate"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "operate-orch-server",
+      "environment": "dev-operate"
+    },
+    {
+      "name": "agent-orch",
+      "aliases": [
+        "agent"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "agent-orch-server",
+      "environment": "dev-agent"
+    }
+  ],
+  "environments": [
+    {
+      "key": "dev-portal",
+      "name": "DEV-portal-orch-server",
+      "headers": []
+    },
+    {
+      "key": "dev-frontend",
+      "name": "DEV-business-frontend-orch-server",
+      "headers": []
+    },
+    {
+      "key": "dev-backend",
+      "name": "DEV-business-backend-orch-server",
+      "headers": []
+    },
+    {
+      "key": "dev-operate",
+      "name": "DEV-operate-orch-server",
+      "headers": []
+    },
+    {
+      "key": "dev-agent",
+      "name": "DEV-agent-orch-server",
+      "headers": []
+    }
+  ],
+  "contract": {
+    "allowedPathPrefixes": [
+      "/admin-api/"
+    ],
+    "forbiddenPathPrefixes": [
+      "/api-portal/",
+      "/api-business-backend/",
+      "/api-business-frontend/",
+      "/api-operate/",
+      "/api-agent/"
+    ]
+  },
+  "runtime": {
+    "manifestIdentity": "broker",
+    "environmentProfiles": {
+      "dev-portal": {
+        "platform": "broker",
+        "environment": "DEV",
+        "service": "portal-orch"
+      },
+      "dev-frontend": {
+        "platform": "broker",
+        "environment": "DEV",
+        "service": "business-frontend-orch"
+      },
+      "dev-backend": {
+        "platform": "broker",
+        "environment": "DEV",
+        "service": "business-backend-orch"
+      },
+      "dev-operate": {
+        "platform": "broker",
+        "environment": "DEV",
+        "service": "operate-orch"
+      },
+      "dev-agent": {
+        "platform": "broker",
+        "environment": "DEV",
+        "service": "agent-orch"
+      }
+    }
+  }
+}

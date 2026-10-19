@@ -1,0 +1,59 @@
+---
+description: b2cmall 业务模块持久化栈（BaseDO / BaseMapperX / Convert / 事务）约定；在处理匹配文件或相关任务时使用
+globs: "**/com/b2cmall/module/**/dal/**/*.java,**/com/b2cmall/module/**/convert/**/*.java"
+alwaysApply: false
+---
+
+# b2cmall 持久化栈
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/b2cmall/module/**/dal/**/*.java,**/com/b2cmall/module/**/convert/**/*.java,**/com/b2cmall/module/**/service/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 依赖注入统一用 `@Resource`，与项目既有风格保持一致
+
+### DataObject（DO）
+
+- 全部继承 `com.zfn.framework.mybatis.core.dataobject.BaseDO`，复用 `creator/createTime/updater/updateTime/deleted`，**禁止重复定义审计字段**
+- 命名 `{Entity}DO`，置于 `dal/dataobject/{entity}/`
+- 主键 MySQL 用雪花：`@TableId(value="id", type=IdType.ASSIGN_ID)`
+- 表名占用关键字时用反引号：`@TableName("`order`")`
+
+```java
+@Data
+@Accessors(chain = true)
+@EqualsAndHashCode(callSuper = true)
+@TableName("coupon_template")
+public class CouponTemplateDO extends BaseDO {
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    private Long id;
+    @TableField("tenant_id")
+    private Long tenantId;
+}
+```
+
+### Mapper
+
+- 继承 `com.zfn.framework.mybatis.core.mapper.BaseMapperX<T>`，**禁止**直接用 MyBatis-Plus 原生 `BaseMapper`
+- 简单查询：`Mapper` 接口 `default` + `LambdaQueryWrapperX`
+- 复杂查询：MyBatis XML，放 `resources/mapper/{domain}/`，参数加 `@Param`
+- 命名 `{Entity}Mapper`，置于 `dal/mysql/{entity}/`，类上加 `@Mapper`
+
+### Convert（对象转换）
+
+- 统一 MapStruct，单例 `INSTANCE`，**禁止手写 `new` 转换或字段逐个 set**
+- 命名 `{Entity}Convert`，置于 `convert/{entity}/`；方法名带方向，如 `convertToOrderRespDTO`
+- Orch 层 Convert 按业务拆分（如 `CouponTemplateConvert`、`CouponClaimConvert`），Feign 调用前 VO ↔ DTO 转换
+
+### 事务
+
+- 本地事务：`@Transactional(rollbackFor = Throwable.class)`
+- 跨服务写操作：`@GlobalTransactional(rollbackFor = Throwable.class)`（Seata，按模块既有用法）
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

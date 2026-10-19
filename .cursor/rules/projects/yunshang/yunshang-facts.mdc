@@ -1,0 +1,35 @@
+---
+description: yunshang 多仓库工作区、服务结构与证据来源事实；在处理 yunshang 仓库或 yunshang 路径下的调查、修改、验证时使用
+globs:
+alwaysApply: false
+---
+
+# yunshang 仓库与证据来源
+
+## 适用范围
+
+- 当前文件或工作区路径属于 yunshang 后端多仓库工作区时适用。
+- 本规则只记录从仓库盘点得到的事实。不要套用 broker 或 b2cmall 的模块、包名和租户工具类。
+
+## 强制规则
+
+- 工作区是多仓库目录，不是单一 Git 仓库。路径：`projects/mall/repos/b2b/backend/yunshang`。变更、分支和提交都落在拥有 `.git` 的子仓库。
+- 平台 `AGENTS.md` 只列出根目录上的 9 个框架与服务仓库。盘点时 `application/` 与 `infra/` 也是独立 Git 仓库，必须一并识别：`yunshang-contract-center`、`yunshang-electronic-signature`、`yunshang-order-center`、`yunshang-product-listing`、`yunshang-audit-log`、`yunshang-bank-settlement`、`yunshang-cmb-broker`、`yunshang-data-exchange`、`yunshang-es-agent`、`yunshang-esign-broker`、`yunshang-filter-router`。
+- 根上的聚合仓库为 `yunshang-dependencies`、`yunshang-common-framework`、`yunshang-biz-framework`、`yunshang-api-sign-verify`、`yunshang-modules-api`、`yunshang-modules-biz`、`yunshang-services-api`、`yunshang-services-biz`、`yunshang-gateways`。
+- 构建系统是 Maven。BOM 为 `yunshang-dependencies`，`groupId` 为 `com.yunshang.platform`。在目标子仓库内选择最窄的 `mvn` 命令。
+- 服务形态与 broker 的 Orch/API/Biz 三层不同。`yunshang-modules-api` / `yunshang-modules-biz` 是模块契约与实现；`yunshang-services-api` / `yunshang-services-biz` 是中心服务；`application/` 与 `infra/` 是可独立部署的应用。网关父 POM 模块为 `yunshang-platform-gateway`、`yunshang-operate-gateway`、`yunshang-api-gateway`、`yunshang-college-gateway`。
+- `yunshang-services-biz/pom.xml` 还声明了 `yunshang-training-web-center`、`yunshang-training-operate-center`、`yunshang-operate-user`、`yunshang-operate-account`，盘点时工作区没有这些目录。`yunshang-portal-gateway` 有源码目录，但不是网关父 POM 的模块。不要把缺失目录当成已经可构建。
+- 业务包根为 `com.yunshang`。已确认的登录与 Web 工具类是 `com.yunshang.framework.security.core.util.SecurityFrameworkUtils` 和 `com.yunshang.framework.web.core.util.WebFrameworkUtils`。仓库中未发现与 broker 同名的 `TenantContextHolder`，不要从 broker 复制租户 API。
+- 分支以该子仓库的 `git status` 为准。盘点时多数仓库在 `feature/3.0.0.0`；`yunshang-order-center` 与 `yunshang-modules-biz` 在 `feature-2.4.3.0`。
+- API 事实优先读工作区 `.apifox/settings.json` 的 `projectId`，再读代码中的接口注解。本机 Codex 没有独立 Swagger MCP。
+- Nacos 只读入口为 `nacos-read` Skill / CLI，显式选择 `platform=yunshang` 与 DEV/SIT。地址、Nacos Namespace、Group 和私有认证文件引用来自既有 Environment Profile；字段未确认时 fail closed，不猜地址、不借用 Broker/B2C、不回退旧 MCP。只返回安全摘要，不记录凭据或配置正文。
+- 数据库、Redis、ES 入口是 Codex MCP `dbx`，只选择名称以 `云商-` 开头的连接。本机没有日志或中间件聚合 MCP，也没有缺陷系统 MCP。日志只在当前宿主已经启用 Loki 时查询；没有该入口时停止并说明缺失。
+- 代码结构入口是 Codex MCP `codegraph`。DEV 构建入口见本项目 CodeArts 规则，profile 为 `yunshang`。
+- Cursor 用户级 `~/.cursor/mcp.json` 为空，业务工作区只有 MCP 模板、没有启用中的 `mcp.json`。Cursor 会话未启用上述 server 时，不得把 Codex 配置当成已经连接，也不得改读经纪商或 B2C 连接。
+- 验证命令按目标子仓库的 `pom.xml` 选择。`yunshang-dependencies` 的 BOM 未声明 JaCoCo 时，不要声称覆盖率门禁已经接入。
+
+## 验证清单
+
+- 已确认当前路径属于 yunshang，且没有读取 broker 项目事实或 `经纪商-` 数据连接。
+- 仓库、分支和模块来自当前 Git 与 `pom.xml`，不是从 broker 规则复制。
+- 外部事实只来自上述只读入口；不可用时明确降级，不编造配置、日志或接口。

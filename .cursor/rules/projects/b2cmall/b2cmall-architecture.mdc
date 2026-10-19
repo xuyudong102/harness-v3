@@ -1,0 +1,60 @@
+---
+description: b2cmall 项目 Orch / API / Biz 三层架构、能力层隔离与对象划分；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall 三层架构（Orch / API / Biz）
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/b2cmall-orch/**/*.java,**/b2cmall-modules-api/**/*.java,**/b2cmall-modules-biz/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 新增业务能力时按「api 定义 Feign 接口与 DTO → biz 实现 ApiImpl/Service → orch 暴露 Controller / OrchService」推进，禁止在 biz 层直接写 HTTP Controller 暴露给前端
+
+b2cmall 采用「编排层 + RPC 契约层 + 业务实现层」划分，写代码前先判断当前文件属于哪一层。
+
+### 分层职责
+
+| 层 | 位置 | 职责 | 不该出现 |
+|---|---|---|---|
+| **Orch（编排/接入）** | `b2cmall-orch/b2cmall-*-orch` | HTTP `Controller`、`*OrchService`、跨域 RPC 校验与数据组装、Feign 前 MapStruct 转 DTO | 直接写 SQL / Mapper / DO |
+| **API（RPC 契约）** | `b2cmall-modules-api/b2cmall-module-*-api` | Feign 接口、`*ReqDTO/*RespDTO`、`ErrorCodeConstants` | 业务逻辑、实现类 |
+| **Biz（业务实现）** | `b2cmall-modules-biz/b2cmall-module-*-biz` | `*ApiImpl`、`*Service(Impl)`、持久化、MQ、Job、Redis | HTTP Controller、`*ReqVO/*RespVO` |
+
+### 能力层禁止互引（强制）
+
+- **能力层（`*-biz`）不允许依赖其他能力层的 `*-api`**。例如 `marketing-biz` 禁止依赖 `product-api`、`trade-api` 等
+- 需要调用其他能力层做校验、查询、组装时，必须在**编排层（`*-orch`）**完成：`*OrchService` 或 `*OrchSupport` 调多个 `*-api`，组装后再调本域 RPC
+- 能力层只做**本域结构性校验**与落库。参考：`CouponScopeOrchSupport`（orch）+ `CouponTemplateHelper.validateScopeConfig`（biz）
+- 历史模块若 pom 仍依赖其他 `*-api`，新增代码不得扩大该依赖；重构时优先下沉到 orch
+
+### 对象命名按层区分
+
+| 层 | 请求/响应对象后缀 | 所在位置 |
+|---|---|---|
+| Orch（HTTP） | `XxxReqVO` / `XxxRespVO` / `XxxPageReqVO` | `controller/admin/{domain}/vo/req\|resp` 或 `vo/{domain}/req\|resp` |
+| API / Biz（RPC） | `XxxReqDTO` / `XxxRespDTO` / `XxxPageReqDTO` | `api/{domain}/dto/req\|resp` 或模块 api 包下 `dto/req\|resp` |
+
+- **biz 层禁止定义 `*ReqVO/*RespVO`**，只用 api 模块的 `*DTO`
+- VO 与 DTO 字段语义保持一致；分页统一继承 `PageParam`、响应用 `PageResult<T>`
+
+### Orch 层标准写法
+
+- Controller：`@RestController` + `@Validated` + `@RequestMapping` + `@Tag`；返回 `CommonResult<T>`
+- 跨域校验与多 RPC 组装放在 `*OrchSupport` 或 `*OrchService`，Feign 调用前经 MapStruct Convert 转 DTO
+- 买家侧：`b2cmall-buyer-orch`（C 端）；商家/平台后台：`b2cmall-admin-orch`；租户 SaaS：`b2cmall-tenant-orch`；开放/回调：`b2cmall-api-orch`
+- `b2cmall-business-frontend-orch` 已废弃，禁止新增能力
+
+### Biz 层 ApiImpl
+
+- biz 对外入口是 `*ApiImpl`（实现 Feign `*Api`），标注 `@RestController`，仅做「转换 + 调 Service + `CommonResult.success`」薄委托
+- 业务校验、状态流转写在 `*ServiceImpl`，不写在 `*ApiImpl`
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

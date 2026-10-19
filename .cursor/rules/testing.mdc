@@ -1,0 +1,167 @@
+---
+description: 测试规范；在处理匹配文件或相关任务时使用
+globs: "**/*Test*.java,**/*Spec*.java"
+alwaysApply: false
+---
+
+# 测试规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*Test*.java,**/*Spec*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 编写单元测试时，若 Mock / Fixture 所需字段（外键 ID、状态码、枚举 `code`、关联实体主键等）无法从 LLD、DDL 或已有代码确定，须通过开发环境数据库 MCP（`{env}-mysql-mcp` 或 `dbx`）查询相关表获取真实样例值，再写入 Arrange 阶段的 Mock 数据；**禁止**用 `null` 占位或编造无业务含义的假 ID
+- 查询数据库仅用于**准备测试数据**；测试执行仍须 Mock 依赖、不连接数据库（与「单元测试不依赖外部服务」一致）
+- MCP 不可用时，从 `ddl.md`、Entity 字段注释、已有枚举 `code` 推导
+
+> 依据《Java 单元测试详细方案 V1.0》（2026-06）整理。与阿里巴巴手册 AIR/BCDE 原则并存，冲突时以本文件为准。
+
+### 技术栈
+
+| 框架/工具 | 版本 | 用途 |
+|---|---|---|
+| JUnit 5 (Jupiter) | 5.9+ | 主测试框架 |
+| Mockito | 4.11+ | Mock 依赖、验证交互 |
+| AssertJ | 3.24+ | 流式断言（替代 JUnit 原生 Assertions） |
+| JaCoCo | 0.8.10+ | 覆盖率统计与质量门禁 |
+
+- **纯单元测试** — 使用 `@ExtendWith(MockitoExtension.class)` + `@Mock` + `@InjectMocks`，不启动 Spring 上下文
+- **Spring 切片/集成测试** — 可用 `@MockBean` / `@SpyBean`；注意会重启 ApplicationContext，纯单元测试优先 Mockito 注解
+- **禁止 PowerMock** — 与 JUnit 5 兼容性差，过度使用通常说明设计有问题
+
+### 覆盖率目标
+
+| 范围 | 行覆盖率 | 分支覆盖率 |
+|---|---|---|
+| 整体（BUNDLE） | ≥ 78% | ≥ 65% |
+| 核心业务模块 | ≥ 80% | ≥ 65% |
+| **新增代码** | ≥ 70% | — |
+| Util 工具类 | 100% | 100% |
+
+- 覆盖率是必要非充分条件；禁止为覆盖率注水、禁止将覆盖率作为唯一 KPI
+- 新代码严格、存量逐步提升；低于基线阻断合并
+
+### 测试分层投入
+
+单元测试重点放在 **Service（~38%）** 与 **Util（~22%）**；Controller 用 `@WebMvcTest`，Repository 用 `@DataJpaTest`，均为切片测试而非纯 Mock 单元测试。
+
+### 命名规范
+
+- **测试类** — 被测类名 + `Test`（如 `OrderServiceTest`），包结构与 `src/main` 镜像
+- **测试方法** — 优先 `should_xxx_when_xxx` 或 `should_return_xxx_given_xxx`；禁止 `testMethod1` 等无意义命名
+- **展示** — 类/方法使用 `@DisplayName` 中文描述业务意图
+- **分组** — 按被测方法用 `@Nested` 组织
+
+```java
+@ExtendWith(MockitoExtension.class)
+@DisplayName("UserService 单元测试")
+class UserServiceTest {
+
+    @Nested
+    @DisplayName("register() 注册用户")
+    class Register {
+
+        @Test
+        @DisplayName("用户名为空时应抛出 BusinessException")
+        void should_throw_when_username_is_blank() { ... }
+    }
+}
+```
+
+### 结构规范（AAA 模式）
+
+每个测试方法遵循 **Arrange-Act-Assert**（与 Given-When-Then 语义等价）：
+
+- **Arrange** — 准备数据与 Mock
+- **Act** — 调用被测方法（每个测试仅一个 Act）
+- **Assert** — 验证结果与交互
+
+```java
+@Test
+void should_calculate_total_when_items_provided() {
+    // Arrange
+    var items = List.of(new Item("A", 100), new Item("B", 200));
+
+    // Act
+    var total = calculator.calculateTotal(items);
+
+    // Assert
+    assertThat(total).isEqualTo(300);
+}
+```
+
+### 断言与 Mock
+
+- **必须使用 AssertJ** — 禁止 JUnit 原生 `Assertions` 作为首选
+- **异常断言** — 使用 `assertThatThrownBy`，验证异常类型与消息
+- **交互验证** — 需要时使用 `verify()`、`verifyNoInteractions()`、`never()`
+- 禁止无断言、禁止仅 assert 非 null、禁止与测试目的无关的过度断言
+- Mock 应合理；过度 Mock 导致测试失去意义时须重构被测设计
+
+### 用例设计
+
+- **BCDE 原则** — Border（边界值）、Correct（正确输入）、Design（结合设计文档）、Error（强制错误输入）
+- **等价类划分** — 有效/无效等价类各取代表值
+- **边界值分析** — 每个边界测：边界值、略小、略大（如 17/18/19）
+- **决策表** — 多条件组合逻辑枚举全部组合
+- **状态迁移** — 状态机类覆盖合法路径、非法转换、初始/终止状态
+- **纯函数/工具类** — 优先 `@ParameterizedTest` + `@CsvSource` / `@ValueSource` / `@NullAndEmptySource`
+
+### 测试数据
+
+- 测试数据在方法内构造，或通过 `@BeforeEach` 初始化；禁止静态变量共享状态
+- 频繁使用的数据封装为 **Test Data Factory**（放 `src/test/java/.../support/`）
+- 复杂对象可用 Builder；随机数据可用 EasyRandom / Instancio
+- 测试数据贴近业务语义，禁止 `"test1"`、`"aaa"` 等无意义占位
+
+### 基本原则（FIRST + AIR）
+
+- **Fast** — 单元测试套件本地/CI 执行 ≤ 3 分钟
+- **Independent** — 测试之间无顺序依赖，可单独运行
+- **Repeatable** — 稳定性 ≥ 99.5%，消除 Flaky Test
+- **Self-validating** — 必须 assert，禁止 System.out 人肉验证
+- **Timely** — 新增代码同步编写单元测试，合并前完成
+- **Automatic** — 全自动执行，纳入 CI
+- **单元测试不依赖外部服务** — 数据库、HTTP、消息队列等使用 Mock
+- **一个测试只验证一个行为点**
+- **测试代码只能在 `src/test/java`**
+
+### 流程要求
+
+- 核心业务推荐 TDD（红-绿-重构）；探索性代码可后补测试，但合并前必须有测试
+- 测试代码与生产代码同等纳入 Code Review
+- 定期清理 Flaky Test、重构重复测试、偿还测试技术债
+- 新增代码影响原有单元测试须及时修正
+
+### CI 质量门禁
+
+| 门禁项 | 阈值 | 级别 |
+|---|---|---|
+| 单元测试通过率 | 100% | ERROR |
+| 行覆盖率 | ≥ 78% | ERROR |
+| 分支覆盖率 | ≥ 65% | ERROR |
+| 新增代码覆盖率 | ≥ 70% | ERROR |
+| 测试执行时间 | ≤ 3 分钟 | WARN |
+| Flaky 测试比例 | ≤ 0.5% | WARN |
+
+机械执行由 `test-guard` 门禁负责（`mvn verify` + JaCoCo check）。业务项目 Maven 接入见 `docs/templates/maven-jacoco-surefire.xml` 与 `docs/templates/maven-test-coverage-integration.md`。
+
+### 禁止行为
+
+- 禁止 `Thread.sleep` 等待异步结果
+- 禁止硬编码环境相关配置（IP、端口）
+- 禁止空断言（仅验证不抛异常不算有效测试）
+- 禁止 PowerMock（除非经评审的极端场景）
+
+### 数据库相关测试
+
+- 不假设数据已存在，用程序插入准备数据
+- 设定自动回滚或使用特定前缀标识测试数据
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

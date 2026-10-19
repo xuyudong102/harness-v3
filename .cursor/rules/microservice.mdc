@@ -1,0 +1,87 @@
+---
+description: 微服务命名、包结构与规划规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 微服务规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/pom.xml,**/*Application.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 新建微服务或模块前，先对照服务规划表确认名称、端口、前缀、库名不冲突
+
+### 微服务项目名
+
+格式：**平台名-服务类型-[组件名]**（`[]` 为可选）
+
+- 每一级必须是**完整英文单词**，长度 ≤ 15 字符
+- 能简单描述服务功能或能力
+- 禁止英文/中文拼音首字母组合、简单数字组合
+
+```text
+✅ cloud-business-base、cloud-business-gateway
+❌ ys-bi、businessCloud-jcxx、cloud-business-gw
+```
+
+### 包命名
+
+根包以项目统一根包开头（如 `com.broker.*` ），分层如下：
+
+| 包 | 职责 |
+|---|---|
+| `{根包}.{项目名}` | 程序入口（Application） |
+| `.model` / `.dal.dataobject` | 实体类 |
+| `.enums` | 枚举 |
+| `.config` | 配置类 |
+| `.dto` / `.vo` / `.convert` / `.query` | 传输、展示、转换、查询对象 |
+| `.dal.mysql` / `.mapper` | 数据访问 |
+| `.manager`（可选） | 通用业务层 |
+| `.service` / `.service.impl` | 业务服务 |
+| `.controller` | REST API |
+
+- 包名全小写，点分隔符间为完整词组，每段 ≤ 15 字符
+- 包名用单数；类名有复数含义时类名可用复数
+
+### 通用模块约束
+
+- 公共 VO/Query/Exception/Enums 禁止在多个微服务包下重复定义
+- pom 采用**最小依赖原则**，无用依赖必须删除
+- 依赖版本在 `properties` 中用变量统一管理，子模块引用 `${xxx.version}`
+
+### 微服务规划（提前规划）
+
+项目启动前须整理并维护服务属性表，至少包含：
+
+| 字段 | 说明 |
+|---|---|
+| 类型 | 网关层 / 应用层 / 能力层 |
+| 服务名称 | 如 auth-center-server |
+| 代码仓 | Git 仓库名 |
+| Controller 前缀 | 如 `/admin-api` |
+| RPC 前缀 | 如 `/rpc-api` |
+| API 前缀 | 如 `/al/auth` |
+| 数据库 | 库名，与微服务名尽量一致 |
+| 端口 | 如 49020 |
+| 说明 | 主要职责 |
+
+### 工程目录约定
+
+```text
+{service-name}/
+├── pom.xml
+├── README.md
+├── src/main/java/          # 主程序
+├── src/main/resources/     # 最小化配置
+├── src/test/java/          # 测试代码（提测前自测通过）
+└── src/test/resources/     # 测试资源
+```
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

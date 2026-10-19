@@ -1,0 +1,86 @@
+---
+description: MCP 服务命名与引用规范；在处理匹配文件或相关任务时使用
+globs: ".cursor/agents/**/*.md,.cursor/skills/**/*.md"
+alwaysApply: false
+---
+
+# MCP 服务规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `.cursor/agents/**/*.md,.cursor/skills/**/*.md` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+### 命名规范
+
+所有 MCP 服务名必须带 `-mcp` 后缀，与 CLI 工具（如 `lark-cli`）区分。
+
+- **通用 MCP**（全环境通用）：`{服务}-mcp`
+- **环境 MCP**（按环境隔离）：`{环境}-{服务}-mcp`
+
+服务名 = 项目级 `.cursor/mcp.json` 中的 key，**无** `user-` 前缀。
+
+### MCP 注册表
+
+#### 通用 MCP
+
+| 服务名 | 用途 | 使用方 | 所属工作流 |
+|--------|------|--------|-----------|
+| `feishu-mcp` | 飞书 API（云文档发布、消息通知） | `skills/hld-to-feishu`、`skills/lld-to-feishu` | feature-delivery |
+| `playwright-mcp` | 浏览器自动化（页面操作、快照、截图） | 按需 | 通用 |
+| `codegraph-mcp` | 本地代码知识图谱（符号搜索/调用链/影响分析） | 按需 | 通用 |
+| `loki-mcp` | Loki 日志查询（LogQL） | `agents/log-investigator` | bugfix |
+| `dbx` | 数据层访问（MySQL / Redis / ES 等，连接名模式） | 当前 Coding Agent、当前 Coding Agent | 全部（涉及 DB 时） |
+
+#### 环境 MCP（模板中用 `dev-` 示例，按实际环境调整）
+
+| 服务名模式 | 用途 | 使用方 | 所属工作流 |
+|-----------|------|--------|-----------|
+| `{env}-mysql-mcp` | 数据库访问（查询/DDL） | 当前 Coding Agent、当前 Coding Agent | 全部（涉及 DB 时） |
+| `{env}-swagger-mcp` | Apifox API 文档查询 | 当前 Coding Agent、当前 Coding Agent | feature-delivery |
+
+Nacos 核心只读查询使用 `skills/nacos-read` 和 `.cursor/scripts/nacos-read.mjs`，目标来自 Environment Profile；不依赖旧 Python MCP 注册，不提供服务注册或配置发布能力。
+
+### 各工作流必需 MCP
+
+| 工作流 | 必需 | 可选 |
+|--------|------|------|
+| bugfix | — | `codegraph-mcp`、`loki-mcp`、`{env}-mysql-mcp` |
+| refactoring | — | `codegraph-mcp`、`{env}-mysql-mcp` |
+| feature-delivery | `feishu-mcp`（飞书发布时） | `codegraph-mcp`、`{env}-mysql-mcp`、`{env}-swagger-mcp` |
+
+### 代理引用规范
+
+在 agent `.md` 或 skill `SKILL.md` 中引用 MCP 时：
+
+- 使用 `mcp.json` 中的 key 作为 server 名，如 `server: "codegraph-mcp"`
+- 不从命名模式推断可调用 server；使用当前宿主已启用的实际 key，`-mcp` 后缀不作为连接有效性的判断依据
+- 环境 MCP 在代理文档中写模式（`{env}-mysql-mcp`），实际调用时按当前项目配置确定具体名称
+- **连接名模式**：数据层用 MCP `dbx` + `connection_name`
+
+### MCP 不可用时的处理
+
+- 不猜测外部事实，不借用其他平台的认证或目标。
+- 如已有经核验、同目标且符合当前授权边界的 CLI / Skill，可按需替代，不要求必须恢复 MCP 后才能继续。
+- 缺少必要事实、连接或授权且无安全替代时，说明缺口和恢复条件，请用户在对应宿主配置；不把不可用结果当成功。
+
+### 配置说明
+
+MCP 由业务项目在 Cursor 本地配置：
+
+| 文件 | 作用 |
+|------|------|
+| 业务项目 `.cursor/mcp.json` | MCP servers 定义（Cursor Settings → MCP 生成，勿提交密钥） |
+
+使用流程：
+
+1. 在 Cursor Settings → MCP 中按需启用 `dbx`、`{projectId}-loki-mcp`、`{env}-mysql-mcp` 等服务
+
+规范表中的服务名是能力名。宿主实际 server key 以当前 Cursor MCP 配置或 Codex `mcp_servers` 为准，二者不一致时以已经启用的 key 调用。Cursor 未启用某个 server 时，不得把另一宿主里的配置当成当前会话已连接。项目该使用哪一个 Nacos、数据库或日志入口，只读当前项目事实，不跨项目借用。
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

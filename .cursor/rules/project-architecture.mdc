@@ -1,0 +1,69 @@
+---
+description: 项目架构与分层结构；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 项目架构与分层结构
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- Orch 编排层尽量避免出现业务判断、数据计算、状态流转等逻辑，应下沉到 BIZ 层
+- 三层职责澄清：①Orch Service 是编排层，尽量将逻辑下沉到 BIZ，目的是减少 Feign 调用次数和 Orch 服务压力（并非所有逻辑都必须下沉，简单逻辑且不增加 Feign 调用的可保留）；②API Service 是纯中转层，严禁包含编排或业务逻辑；③BIZ Service 内部尽量减少 Service 之间的相互调用
+
+### 分层结构
+
+项目采用 Orch + API + BIZ 三层 Service 架构：
+
+- **Controller 层** — 接收请求、参数校验、调用 API Service
+- **Orch Service 层（编排层）** — 跨服务编排，通过 Feign 调用 BIZ 服务；尽量将业务逻辑下沉到 BIZ 层，以减少 Feign 调用次数和 Orch 服务自身压力
+- **API Service 层（中转层）** — 纯中转，不允许包含服务编排或业务逻辑
+- **BIZ Service 层（业务层）** — 核心业务逻辑、事务管理、数据校验；尽量减少 Service 之间的相互调用
+- **Mapper 层** — 数据持久化
+- **Domain/Entity 层** — 领域模型
+- **DTO/VO 层** — 数据传输对象
+- **common-framework** — 跨模块共享的常量、工具类、基础枚举
+
+### 分层领域对象
+
+| 对象 | 说明 |
+|------|------|
+| DO (Data Object) | 与数据库表一一对应，通过 DAO 层向上传输 |
+| DTO (Data Transfer Object) | Service/Manager 向外传输 |
+| BO (Business Object) | Service 层封装业务逻辑 |
+| VO (View Object) | Web 向模板渲染引擎层传输 |
+| Query | 查询对象，超过 2 个参数封装，禁止 Map 传输 |
+
+### 模块职责
+
+> 待适配：根据实际项目填写各模块名称与职责边界
+
+| 模块 | 职责 | 备注 |
+|------|------|------|
+| 待补充 | 待补充 | 待补充 |
+
+### 依赖方向
+
+- 上层可依赖下层，禁止反向依赖
+- Controller → API Service（中转）→ Orch Service（编排）→ BIZ Service → Mapper → Entity
+- 跨模块调用通过 Service 接口，禁止直接访问其他模块的 Mapper
+- 有其他方案存在，绝对不可以使用递归
+
+### 服务器与运行时（阿里巴巴手册 · 工程结构）
+
+- **【强制】远程调用必须设置超时** — HttpClient、Feign、RPC 等须明确 Timeout
+- **【推荐】** 超时生效顺序：客户端 Special Method → 客户端接口 → 服务端 Special Method → 服务端接口
+- **【推荐】** 高并发可调小 TCP `time_wait`；调大最大文件句柄数
+- **【推荐】** JVM 加 `-XX:+HeapDumpOnOutOfMemoryError`；**Xms 与 Xmx 设相同**
+- **【推荐】** 慢服务独立线程池，避免拖垮主线程池
+- **【参考】** 内部重定向用 forward；外部重定向 URL 须统一代理生成（HTTPS 一致）
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

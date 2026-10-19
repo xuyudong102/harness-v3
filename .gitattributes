@@ -1,0 +1,4 @@
+# Shell scripts: LF line endings; track as executable in git (mode 100755)
+*.sh text eol=lf
+link-cursor-config.sh text eol=lf
+.cursor/scripts/*.sh text eol=lf

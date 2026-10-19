@@ -1,0 +1,32 @@
+---
+description: broker CodeArts DEV 租户路由与 Pipeline 稳定事实；在处理 broker Pipeline 查询、构建或部署时使用
+globs:
+alwaysApply: false
+---
+
+# broker CodeArts 路由
+
+## 适用范围
+
+- 任务目标属于 broker，且需要查询 CodeArts Pipeline 或完成 DEV 构建、部署时适用。
+- 操作方法与授权契约统一读取 `.cursor/skills/codearts-pipeline/SKILL.md`，本 Rule 不复制 KooCLI 流程。
+
+## 强制规则
+
+- Harness 项目作用域：`broker`；CodeArts tenant：`broker`；KooCLI profile：`broker`。
+- Region 使用 `broker` profile 的当前配置并在调用前核验，禁止根据文档或 default profile 猜测。
+- CodeArts Project ID 只从该 profile 的 `custom.codeartsProjectId` 读取，不在 Rule、Prompt 或命令模板中保存实际值。
+- 每次命令显式使用 `--cli-profile=broker`；禁止依赖 `default` / current profile。
+- Mutation 前必须确认项目、tenant、profile、Region、Project、Pipeline、branch 与 `DEV` 环境一致；任一不一致立即停止。
+- broker 身份不得查询或操作 yunshang Project/Pipeline，也不得把本 Rule 注入 yunshang 项目任务。
+
+- 当前 DEV/SIT 的 CodeArts Pipeline 和 Kubernetes 绑定只读取 Local Environment Profile：`~/.harness/runtime/profiles/broker/<dev|sit>.json`，不从旧云端流水线名称推导本地环境。
+- Environment Profile 未确认、缺失或目标漂移时返回 `NEEDS_HUMAN`；不自动回退旧 dev，不按名称临时后缀猜测目标。
+- SIT 本轮只读；DEV 写入需当前任务目标确认和授权。旧云端记录保持历史可用，但不是当前环境默认路由。
+
+## 验证清单
+
+- 已按精确 Pipeline 名称解析唯一真实 Pipeline ID，未在资源中硬编码 ID。
+- 所有 KooCLI 调用均显式绑定 `broker` profile 和本机 Project 引用。
+- Mutation 具有当前任务的 broker DEV 授权，且 branch、sources/jobs 来自真实 Git 与 Pipeline metadata。
+- 未读取、输出或持久化 AK、SK、Token；未扩大到其他租户或非 DEV 环境。

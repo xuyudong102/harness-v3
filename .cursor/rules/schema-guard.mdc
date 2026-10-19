@@ -1,0 +1,50 @@
+---
+description: Schema 一致性门禁；在处理匹配文件或相关任务时使用
+globs: "**/*.sql"
+alwaysApply: false
+---
+
+# Schema 一致性门禁
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.sql,**/entity/**/*.java,**/model/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- ⚠️ 删除 / 下沉 Entity 物理字段必须有调用点读写影响证据（新数据读到 NULL 是否有业务副作用）。若影响面超出当前授权范围，须说明阻塞与可选处理方式，不得默默删字段导致下游静默读 NULL；证据可来自仓库、工具结果或当前会话，仅在需要跨会话恢复时按渐进式制品契约持久化。
+
+### 规则
+
+- **DDL 与 Entity 字段必须一一对应** — 新增/修改表字段后须同步更新 Entity；以项目实际维护的 DDL / migration 和已核验的 Schema 为依据，不要求新建固定路径制品。
+- **字段类型映射正确** — SQL 类型与 Java 类型匹配（如 VARCHAR → String, BIGINT → Long）
+- **索引与查询模式匹配** — WHERE 条件和 JOIN 字段必须有对应索引
+
+### 检查清单
+
+变更数据库结构或 Entity 时：
+
+1. ✅ 项目 DDL / migration 新增字段 → Entity 同步新增
+2. ✅ Entity 新增持久化字段 → 权威 Schema / migration 有对应列
+3. ✅ 字段类型映射正确（含精度、长度、可空）
+4. ✅ 字段命名一致（下划线 ↔ 驼峰转换正确）
+5. ✅ 新增查询条件有对应索引
+
+### 常见类型映射
+
+| SQL 类型 | Java 类型 |
+|----------|-----------|
+| VARCHAR | String |
+| BIGINT | Long |
+| INT | Integer |
+| DECIMAL | BigDecimal |
+| DATETIME / TIMESTAMP | LocalDateTime |
+| DATE | LocalDate |
+| TINYINT(1) | Boolean |
+| BIT(1) | Boolean |
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

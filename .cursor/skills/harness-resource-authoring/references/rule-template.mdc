@@ -1,0 +1,53 @@
+# Rule 模板
+
+```markdown
+---
+description: <约束什么；在什么任务或文件场景使用>
+globs: "<glob-1>,<glob-2>"
+alwaysApply: false
+---
+
+# <规则标题>
+
+## 适用范围
+
+## 强制规则
+
+## 禁止事项
+
+## 正确示例
+
+## 反例
+
+## 验证清单
+```
+
+## 激活类型
+
+| 类型 | description | globs | alwaysApply |
+|---|---|---|---|
+| Always | 非空 | 空 | `true` |
+| Auto Attached | 非空 | 非空带引号标量 | `false` |
+| Agent Requested | 非空且含触发语义 | 空 | `false` |
+| Manual | 非空且注明仅显式调用 | 空 | `false` |
+
+## 编写约束
+
+- frontmatter 只允许 `description`、`globs`、`alwaysApply`，顺序固定。
+- 一个列表项只表达一个可验证约束，使用命令式表述。
+- `禁止事项`、示例和反例按需保留；`适用范围`、`强制规则`、`验证清单`必填。
+- 禁止使用 `其他要求`、`其它`、`补充说明`、`补充规则` 等兜底章节。
+- 叶子 Rule 自描述，不引用其他 `.mdc`；组合加载只在路由层维护。
+- 通用 Rule 位于 `.cursor/rules/<topic>.mdc`，按领域命名。
+- 项目 Rule 位于 `.cursor/rules/projects/<project>/<project>-<topic>.mdc` 且必须使用
+  `alwaysApply: false`。默认留空 `globs` 由项目 Discovery 按需提示；只有高精度路径
+  才使用项目专属 glob 自动附加。
+- 项目差异不复制整套通用规则，也不登记到通用纠正分类表。
+
+## 新增检查
+
+1. 搜索同义 Rule 和现有领域所有者。
+2. 选择激活类型并验证 globs 是否会扩大范围。
+3. 通用新领域按需更新 `rules-loader` 和纠正路由。
+4. 项目 Rule 只更新项目作用域资源，不进入通用分类表。
+5. 运行资源校验和 Rule 交叉引用检查。

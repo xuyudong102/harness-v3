@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Example", "version": "1.0.0", "description": "Example contract" },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/v1/items/{id}": { "get": { "operationId": "getItem", "summary": "Get item", "tags": ["Items"], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }], "responses": { "200": { "description": "OK", "headers": { "X-Trace": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Item" } } } }, "404": { "description": "Missing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } } } }, "delete": { "operationId": "deleteItem", "summary": "Delete item", "tags": ["Items"], "responses": { "204": { "description": "Deleted" } } } },
+    "/v1/items": { "post": { "operationId": "createItem", "summary": "Create item", "tags": ["Items"], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateItem" } } } }, "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Item" } } } } } } }
+  },
+  "components": { "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } }, "schemas": { "Item": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] } } }, "CreateItem": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }, "Error": { "type": "object", "required": ["code"], "properties": { "code": { "type": "string" } } } } }
+}

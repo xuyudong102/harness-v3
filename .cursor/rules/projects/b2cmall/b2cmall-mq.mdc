@@ -1,0 +1,83 @@
+---
+description: b2cmall 项目 RocketMQ 消息收发（BaseMessage / RocketMQEnhanceTemplate / EnhanceMessageHandler）约定；在处理匹配文件或相关任务时使用
+globs: "**/com/b2cmall/**/mq/**/*.java"
+alwaysApply: false
+---
+
+# b2cmall RocketMQ 约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/b2cmall/**/mq/**/*.java,**/*Producer.java,**/*Consumer.java,**/*Message.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 消费逻辑必须幂等：以 `messageId`/业务唯一键去重，防止 RocketMQ 重投导致重复处理
+
+b2cmall 使用 Apache RocketMQ，消息基类是 `com.zfn.framework.common.pojo.BaseMessage`，增强模板来自 `com.zfn.framework.mq`。
+
+### 包结构
+
+```
+{module}/mq/
+├── message/   XxxMessage    （继承 BaseMessage，跨模块共享时可放 *-api）
+├── constant/  XxxMqConstants（Topic / Tag 唯一入口，如 CouponMqConstants）
+├── producer/  XxxProducer
+└── consumer/  XxxConsumer   （继承 EnhanceMessageHandler，实现 RocketMQListener）
+```
+
+- 跨 orch/biz 共享的消息体与 MQ 常量优先定义在对应 `b2cmall-module-*-api` 的 `mq/message`、`mq/constant` 包
+- orch 侧只放本接入层的 producer/consumer，禁止在 biz 层直接消费 orch 专属 topic（除非该 consumer 本就属于 biz 模块）
+
+### Message
+
+- 消息体继承 `com.zfn.framework.common.pojo.BaseMessage`（自带 `key/source/retryTimes/messageId/topic/tag`），**禁止**自定义重复字段
+- 无 HTTP 上下文场景须在消息体内显式携带 `tenantId` 等业务维度
+- 命名 `XxxMessage`，放 `mq/message/`
+
+### Topic / Tag 常量
+
+- 业务域 topic、tag 统一登记在模块级 `*MqConstants`（如 `CouponMqConstants`），**禁止**在 producer/consumer 里硬编码字符串
+- 框架级拼接常量使用 `com.zfn.framework.mq.enums.RocketMQConstants`（`DELIMITER`、`CONSUMER_GROUP_SUFFIX`、`CONSUMER_THREAD_NUMBER`）
+- 消费组按约定拼接：`{TOPIC}{DELIMITER}{TAG}{DELIMITER}{模块标识}{DELIMITER}{CONSUMER_GROUP_SUFFIX}`
+
+### Producer
+
+- 注入 `com.zfn.framework.mq.core.RocketMQEnhanceTemplate` 发送，**禁止**直接用原生 `RocketMQTemplate`
+- 发送前设置 `message.setTopic(...)`、`message.setTag(...)`、`message.setSource(...)`、`message.setKey(...)`（key 含租户/业务唯一维度）
+
+```java
+@Component
+public class CouponUndoneWakeIssueProducer {
+    @Resource
+    private RocketMQEnhanceTemplate rocketMQEnhanceTemplate;
+
+    public void publishNotLoggedIn(Long tenantId, List<Long> userIds) {
+        CouponUndoneNotLoggedInWakeIssueMessage message = new CouponUndoneNotLoggedInWakeIssueMessage();
+        message.setTenantId(tenantId);
+        message.setTopic(CouponMqConstants.COUPON_USER_EVENT_TOPIC);
+        message.setTag(CouponMqConstants.COUPON_AWAKEN_NOT_LOGGED_IN_TAG);
+        rocketMQEnhanceTemplate.send(
+                CouponMqConstants.COUPON_USER_EVENT_TOPIC,
+                CouponMqConstants.COUPON_AWAKEN_NOT_LOGGED_IN_TAG,
+                message);
+    }
+}
+```
+
+### Consumer
+
+- 继承 `com.zfn.framework.mq.core.EnhanceMessageHandler<T extends BaseMessage>`，实现 `RocketMQListener<T>`
+- `onMessage` 内调 `super.dispatchMessage(message)`，业务写在 `handleMessage`；按需实现 `handleMaxRetriesExceeded` 与 `throwException`
+- `@RocketMQMessageListener` 的 topic / consumerGroup / selectorExpression 全部引用 `*MqConstants` 与 `RocketMQConstants`
+
+### 租户上下文
+
+- MQ 消费端不在网关链路内：消费时按消息体内显式 `tenantId` 处理，跨租户/公共表用 `TenantUtils.execute(...)` 或 `@TenantIgnore` 显式控制
+- 对应 RPC 入口须在 biz 模块 `application.yaml` 的 `zfn.tenant.ignore-urls` 同步登记
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

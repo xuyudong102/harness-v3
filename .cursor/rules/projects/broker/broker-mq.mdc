@@ -1,0 +1,95 @@
+---
+description: broker 项目 RocketMQ 消息收发（BaseMessage / EnhanceTemplate / EnhanceMessageHandler）约定；在处理匹配文件或相关任务时使用
+globs: "**/com/broker/**/mq/**/*.java"
+alwaysApply: false
+---
+
+# broker RocketMQ 约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/broker/**/mq/**/*.java,**/*Producer.java,**/*Consumer.java,**/*Message.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 消费逻辑必须幂等：以 `messageId`/业务唯一键去重，防止 RocketMQ 重投导致重复处理
+
+broker 用 Apache RocketMQ（非 Spring Cloud Stream），消息基类是 `com.broker.framework.common.pojo.BaseMessage`，无 `AbstractStreamMessage`。
+
+### 包结构
+
+```
+{module}/mq/
+├── message/  XxxMessage   （继承 BaseMessage）
+├── producer/ XxxProducer
+└── consumer/ XxxConsumer  （继承 EnhanceMessageHandler，实现 RocketMQListener）
+```
+
+### Message
+
+- 消息体继承 `com.broker.framework.common.pojo.BaseMessage`（自带 `key/source/retryTimes/messageId/platformType/topic/tag`），**禁止**自定义重复字段
+- 命名 `XxxMessage`，放 `mq/message/`
+
+### Topic / Tag 常量
+
+- 所有 topic、tag 统一登记在 `com.broker.framework.mq.enums.RocketMQConstants`，**禁止**在 producer/consumer 里硬编码字符串
+- 消费组按约定拼接：`{TOPIC}{DELIMITER}{TAG}{DELIMITER}{CONSUMER_GROUP_SUFFIX}`（`DELIMITER="_"`、`CONSUMER_GROUP_SUFFIX="CONSUMER"`）
+
+### Producer
+
+- 注入框架增强模板发送，**禁止**直接用原生 `RocketMQTemplate`：
+  - `RocketMQEnhanceTemplate`：携带租户/平台上下文的常规发送
+  - `RocketMQCommonEnhanceTemplate`：跨服务/无平台上下文的公共发送
+
+```java
+@Component
+public class YsAttributeSyncProducer {
+    @Resource
+    private RocketMQEnhanceTemplate rocketMQEnhanceTemplate;
+
+    public void send(YsAttributeSyncMessage message) {
+        rocketMQEnhanceTemplate.send(
+            RocketMQConstants.YS_OPERATE_USER_ATTRIBUTE_SYNC_TOPIC,
+            RocketMQConstants.YS_OPERATE_USER_ATTRIBUTE_SYNC_TAG,
+            message);
+    }
+}
+```
+
+### Consumer
+
+- 继承 `com.broker.framework.mq.core.EnhanceMessageHandler<T extends BaseMessage>`（事件类用 `EnhanceEventMessageHandler`），实现 `RocketMQListener<T>`
+- `onMessage` 内调 `super.dispatchMessage(message)`，业务写在 `handleMessage`；按需实现 `handleMaxRetriesExceeded` 与 `throwException`（控制重试是否 ack）
+- `@RocketMQMessageListener` 的 topic / consumerGroup / selectorExpression 全部引用 `RocketMQConstants`
+
+```java
+@RocketMQMessageListener(
+    topic = RocketMQConstants.YS_OPERATE_USER_ATTRIBUTE_SYNC_TOPIC,
+    consumerGroup = RocketMQConstants.YS_OPERATE_USER_ATTRIBUTE_SYNC_TOPIC + RocketMQConstants.DELIMITER
+        + RocketMQConstants.YS_OPERATE_USER_ATTRIBUTE_SYNC_TAG + RocketMQConstants.DELIMITER
+        + RocketMQConstants.CONSUMER_GROUP_SUFFIX,
+    selectorExpression = RocketMQConstants.YS_OPERATE_USER_ATTRIBUTE_SYNC_TAG)
+public class YsAttributeSyncConsumer extends EnhanceMessageHandler<YsAttributeSyncMessage>
+        implements RocketMQListener<YsAttributeSyncMessage> {
+
+    @Override
+    public void onMessage(YsAttributeSyncMessage message) {
+        super.dispatchMessage(message);
+    }
+
+    @Override
+    public void handleMessage(YsAttributeSyncMessage message) {
+        // 业务处理
+    }
+}
+```
+
+### 租户上下文
+
+- MQ 消费端不在网关链路内，无上下文租户：消费时按消息体内显式 `tenantId` 处理，跨租户/公共表用 `TenantUtils.execute(...)` 或 `@TenantIgnore` 显式控制，对应 RPC 入口需在 `ignore-urls` 登记
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

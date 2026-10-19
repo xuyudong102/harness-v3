@@ -1,0 +1,106 @@
+---
+description: 并发处理规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 并发处理规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- **单例对象须保证线程安全** — 其中的方法也要线程安全
+- `Timer` 中一个 `TimeTask` 未捕获异常会终止其他任务 — 用 `ScheduledExecutorService` 替代
+- `CountDownLatch` 每个线程必须 countDown — 在 catch 中也要确保执行
+- `Random` 实例避免多线程共享 — JDK7+ 用 `ThreadLocalRandom`
+- HashMap 高并发 resize 可能死链 CPU 飙升 — 用 `ConcurrentHashMap`
+
+### 线程池创建
+
+- **禁止用 Executors 创建线程池** — 必须通过 `ThreadPoolExecutor` 显式指定参数
+  - `FixedThreadPool`/`SingleThreadPool`：队列长度 `Integer.MAX_VALUE`，可能 OOM
+  - `CachedThreadPool`：最大线程数 `Integer.MAX_VALUE`，可能 OOM
+  - `ScheduledThreadPool`：队列长度 `Integer.MAX_VALUE`，可能 OOM
+- **线程资源必须通过线程池提供** — 禁止在应用中自行 `new Thread()`
+- **创建线程/线程池时指定有意义的名称** — 方便 jstack 排查问题
+
+### ThreadLocal
+
+- **必须在 finally 中 remove** — 线程池场景线程复用，不清理会导致数据串读和内存泄漏
+- ThreadLocal 对象建议用 `static` 修饰
+
+```java
+objectThreadLocal.set(userInfo);
+try {
+    // ...
+} finally {
+    objectThreadLocal.remove();
+}
+```
+
+### SimpleDateFormat
+
+- **线程不安全** — 禁止定义为 `static` 共享变量
+- 方案一：使用 `ThreadLocal<DateFormat>` 包装
+- 方案二（推荐）：JDK8+ 使用 `DateTimeFormatter`（线程安全）
+
+### 锁的使用
+
+- **lock 必须在 try 外加锁** — lock 与 try 之间不能有可能抛异常的代码
+
+```java
+// ✅ 正确
+Lock lock = new XxxLock();
+lock.lock();
+try {
+    doSomething();
+} finally {
+    lock.unlock();
+}
+
+// ❌ 错误：lock 在 try 内
+try {
+    doSomething(); // 此处异常导致 finally 中 unlock 未加锁的对象
+    lock.lock();
+    doOthers();
+} finally {
+    lock.unlock();
+}
+```
+
+- **tryLock 须先判断是否持有锁再释放**
+
+```java
+boolean isLocked = lock.tryLock();
+if (isLocked) {
+    try {
+        doSomething();
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+- **多资源加锁保持一致顺序** — 防止死锁
+- **能用无锁结构就不用锁** — 能锁区块就不锁整个方法；能用对象锁就不用类锁
+
+### volatile 与原子操作
+
+- **double-checked locking 须 volatile** — 延迟初始化的目标属性声明为 `volatile`
+- **volatile 解决一写多读** — 多写场景无法保证线程安全
+- **count++ 用 `AtomicInteger`** — JDK8+ 推荐 `LongAdder`（性能优于 AtomicLong）
+
+### 乐观锁与悲观锁
+
+- **并发修改同一记录须加锁** — 应用层、缓存层或数据库层（乐观锁 version 字段）
+- 冲突概率 < 20% 用乐观锁，乐观锁重试次数 >= 3
+- **资金相关敏感信息用悲观锁** — 一锁二判三更新四释放
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

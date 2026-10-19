@@ -1,0 +1,49 @@
+{
+  "schema": "apifox-openapi-project/v1",
+  "project": {
+    "label": "b2c-buyer",
+    "name": "B2C 商城",
+    "teamId": "207638",
+    "branch": "main",
+    "apifoxProjectId": "8911875"
+  },
+  "services": [
+    {
+      "name": "buyer-orch",
+      "aliases": [
+        "buyer"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "buyer-orch-server",
+      "environment": "dev-buyer"
+    }
+  ],
+  "environments": [
+    {
+      "key": "dev-buyer",
+      "name": "DEV-buyer-orch-server",
+      "headers": []
+    }
+  ],
+  "contract": {
+    "allowedPathPrefixes": [
+      "/admin-api/orch-layer/buyer/"
+    ],
+    "forbiddenPathPrefixes": [
+      "/buyer-api/",
+      "/tenant-api/"
+    ]
+  },
+  "runtime": {
+    "manifestIdentity": "b2c-buyer",
+    "environmentProfiles": {
+      "dev-buyer": {
+        "platform": "b2cmall",
+        "environment": "DEV",
+        "service": "b2cmall-buyer-orch"
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+---
+description: 渐进式跨阶段状态约束；在需要判断对话上下文、持久制品、交接、审计或归档时使用
+globs:
+alwaysApply: false
+---
+
+# 渐进式任务状态约束
+
+## 适用范围
+
+- 适用于判断任务信息应保留在当前会话，还是需要跨会话、跨 Agent、审批或审计持久化。
+
+## 强制规则
+
+### Artifact Level
+
+- 当前 Coding Agent 根据生命周期和实际风险选择 L0–L4；禁止新增 Artifact Router Agent。
+- L0（问答、只读定位、简单 investigation）与 L1（单会话普通变更）默认零持久制品。
+- L2（单会话复杂任务）默认最多持久化一个 `task.md`。
+- L3（跨会话、跨仓或多人接力）持久化 `task.md`、`verification.md`，确有独立设计时增加 `design.md`。
+- L4（生产、迁移、资金、安全、合规或不可逆操作）按真实需要增加 migration、approval、rollback 与 Specialist evidence；禁止生成空模板。
+
+### Context 与 Ground Truth
+
+- L0/L1 允许 conversation、repository、Git、工具输出和 runtime facts 直接满足阶段输入语义。
+- L0/L1 不得因缺少 `root-cause.md`、plan、change manifest、review report 或 workflow state 而停止。
+- Git diff、测试、CI、扫描器、MCP 和运行环境已有更可靠事实时，禁止为了流程完整重复抄写 Markdown。
+- L2 优先把 Goal、Scope、决定、证据、变更、验证和风险合并进 `task.md`；多阶段可追加同一文件。
+- 只有 L3/L4 的跨上下文交接，或外部审批/审计明确要求时，关键状态才必须先持久化。
+
+### Adaptive Playbook Compatibility
+
+- 当前 Coding Agent 选择下一步；Workflow 只提供按需 guidance、completion contract 和 escalation，不规定普通任务的 reasoning path。
+- 旧 phase YAML 默认执行关闭；历史 entry/exit 路径仅是兼容参考，不以文件或 transition 恢复普通任务。
+- Agent/Skill 的 legacy 制品路径都不构成 L0/L1 文件门禁；等价内容保留当前会话。L0/L1 不维护 state、decision-log、current/next/completed phase 或 debug log。
+- 权限、生产变更、数据库迁移、回滚和人工批准所需证据不受默认零制品规则豁免。
+
+### 质量与验证
+
+- 代码变更必须满足 evidence contract：适用机械证据、至少一个 current-diff fresh Integrated Review 结果、按风险专项审查、确定性 Decision，以及证据完整性与 freshness 判定；这些是完成谓词，不规定固定执行顺序或 Review 次数。
+- 证据关联当前 repo、branch、HEAD 或 diff fingerprint；Review 未改变代码或配置时，已有当前 diff 证据保持 fresh，后续变更只使受影响证据 stale。
+- L0/L1 在当前会话报告命令和结果，L2 可追加到 `task.md`，L3/L4 才默认写 `verification.md`；不要求 review-routing、review report 或 quality-gate 文件。
+- L4 的 Security/Data-Concurrency 报告可以独立持久化；其他 Level 优先返回会话或合并到 durable file。
+- 已持久化的 Check/Run 继续追加，禁止覆盖历史记录。
+
+### 归档
+
+- L0/L1 不创建 task directory，也不归档。
+- L2 仅在用户明确要求或确需交接且已有 durable file 时归档。
+- L3/L4 只有 evidence contract 判定为 PASS 且存在实际 durable files 时才归档。
+- 禁止创建空目录或只含模板的 archive。
+- `docs/artifacts/archive/**` 是历史证据，禁止为适配新结构而重写。
+
+## 验证清单
+
+- 已根据生命周期和外部风险选择 Level，且没有新增 AI Router。
+- L0/L1 未因 legacy artifact 缺失停止，也未创建空任务目录。
+- 持久内容确实需要跨当前上下文，并未复制 Git/CI/工具已有事实。
+- L3/L4 的审批、迁移、回滚、验证与专项证据没有被误删。

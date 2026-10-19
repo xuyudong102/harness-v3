@@ -1,0 +1,71 @@
+---
+description: broker 项目 Orch / API / Biz 三层架构与对象划分；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# broker 三层架构（Orch / API / Biz）
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/broker-orch/**/*.java,**/broker-modules-api/**/*.java,**/broker-modules-biz/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 新增一个业务能力时，按「api 定义 Feign 接口与 DTO → biz 实现 ApiImpl/Service → orch 暴露 Controller」的顺序推进，禁止在 biz 层直接写 HTTP Controller 暴露给前端
+
+broker 采用「编排层 + RPC 契约层 + 业务实现层」三层划分，写代码前先判断当前文件属于哪一层，按该层规则落位。
+
+### 分层职责
+
+| 层 | 位置 | 职责 | 不该出现 |
+|---|---|---|---|
+| **Orch（编排/接入）** | `broker-orch/broker-*-orch` | HTTP `Controller`、鉴权、入参校验、跨服务编排、VO 组装 | 直接写 SQL / Mapper / DO |
+| **API（RPC 契约）** | `broker-modules-api/broker-module-*-api` | Feign 接口、DTO、`ErrorCodeConstants` | 业务逻辑、实现类 |
+| **Biz（业务实现）** | `broker-modules-biz/broker-module-*-biz` | `*ApiImpl`、`*Service(Impl)`、持久化、MQ、Job | HTTP Controller、`*ReqVO/*RespVO` |
+
+### 关键约束
+
+#### 1. 业务实现层没有 Controller
+
+- biz 模块对外入口是 **`*ApiImpl`（实现对应 Feign `*Api`）**，标注 `@RestController` 但仅做「转换 + 调 Service + 包 `CommonResult`」的薄委托
+- 业务校验、状态流转写在 **`*ServiceImpl`**，不写在 `*ApiImpl`
+- 例外：内部运维/三方回调类接口偶有 Controller（如银行告警处理），属特例，不作为常规模式
+
+```java
+// broker-modules-biz/.../api/order/OrderApiImpl.java
+@RestController
+public class OrderApiImpl implements OrderApi {
+    @Resource
+    private OrderService orderService;
+
+    @Override
+    public CommonResult<OrderRespDTO> getById(Long id) {
+        return success(OrderConvert.INSTANCE.convertToOrderRespDTO(orderService.get(id)));
+    }
+}
+```
+
+#### 2. 对象命名按层区分（禁止跨层混用）
+
+| 层 | 请求/响应对象后缀 | 所在位置 |
+|---|---|---|
+| Orch（HTTP） | `XxxReqVO` / `XxxRespVO` / `XxxSaveReqVO` / `XxxPageReqVO` | `controller/admin/{domain}/vo/req|resp` |
+| API（RPC） | `XxxReqDTO` / `XxxRespDTO` / `XxxSaveReqDTO` / `XxxPageReqDTO` / `XxxDTO` | `api/{domain}/dto/req|resp` |
+
+- **biz 层禁止定义 `*ReqVO/*RespVO`**，只用 api 模块的 `*DTO`
+- VO 与 DTO 字段语义需保持一致，分页统一继承 `PageParam`、响应用 `PageResult<T>`
+
+#### 3. Controller 标准写法（Orch 层）
+
+- 类级：`@RestController` + `@Validated` + `@RequestMapping("/业务路径")` + `@Tag`
+- 方法级：`@Operation(summary=...)`；写接口加 `@RepeatSubmit` 防重复提交
+- 权限：`@PreAuthorize("@broker.brokerHasAnyPermissions('...')")`；开放/回调接口用 `@PermitAll`
+- 返回类型一律 `CommonResult<T>`
+- **后台/前台区分按 orch 应用划分，不靠 controller 包名**：`broker-operate-orch`（运营后台）、`broker-business-backend-orch`（商家后台）、`broker-business-frontend-orch`（采购前台）、`broker-api-orch`（开放/回调）。包统一为 `controller.admin.{domain}`
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

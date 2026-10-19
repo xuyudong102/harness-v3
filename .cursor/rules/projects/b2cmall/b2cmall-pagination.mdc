@@ -1,0 +1,66 @@
+---
+description: b2cmall 项目分页对象（PageParam / PageResult）使用规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall 分页规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/b2cmall/**/*.java,**/b2cmall-*/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 分页接口必须使用框架 `PageResult<T>` + `PageParam`，禁止在 VO 中自行定义 `pageNo/pageSize/total/list` 等分页字段
+
+项目已封装统一分页对象（`com.zfn.framework.common.pojo`），**禁止在 VO/DTO 中自行定义 `pageNo`、`pageSize`、`total`、`list` 等分页字段**。
+
+### 请求端
+
+- 使用 `com.zfn.framework.common.pojo.PageParam`（含 `pageNo`、`pageSize`，自带校验注解）
+- 如需额外查询条件，**继承** `PageParam` 添加业务字段
+- Orch 层分页请求命名 `XxxPageReqVO`；API/Biz 层命名 `XxxPageReqDTO`
+
+```java
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class DistributionOrderPageReqVO extends PageParam {
+    @Schema(description = "订单号")
+    private String orderNo;
+}
+```
+
+### 响应端
+
+- 使用 `com.zfn.framework.common.pojo.PageResult<T>`（含 `list: List<T>` + `total: Long`）
+- Controller 返回类型固定为 `CommonResult<PageResult<XxxVO>>`
+- Service 返回类型固定为 `PageResult<XxxVO>` 或 `PageResult<XxxDTO>`
+- 空结果使用 `PageResult.empty()`
+
+```java
+CommonResult<PageResult<XxxRespVO>> getXxxPage(XxxPageReqVO reqVO);
+PageResult<XxxRespDTO> getXxxPage(XxxPageReqDTO reqDTO);
+return PageResult.empty();
+return new PageResult<>(list, total);
+```
+
+### 禁止写法
+
+```java
+// ❌ 禁止：VO 中自行定义分页字段
+public class XxxListRespVO {
+    private List<XxxVO> list;
+    private Integer pageNo;
+    private Long total;
+}
+
+// ❌ 禁止：Controller 返回自定义分页 VO
+CommonResult<XxxListRespVO> getXxxList(...);
+```
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

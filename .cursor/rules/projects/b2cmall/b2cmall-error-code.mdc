@@ -1,0 +1,57 @@
+---
+description: b2cmall 项目错误码落位与 ServiceException 抛出约定；在处理匹配文件或相关任务时使用
+globs: "**/b2cmall-modules-api/**/enums/ErrorCodeConstants.java,**/b2cmall-modules-biz/**/constant/ErrorCodeConstants.java"
+alwaysApply: false
+---
+
+# b2cmall 错误码与异常抛出
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/b2cmall-modules-api/**/enums/ErrorCodeConstants.java,**/b2cmall-modules-biz/**/constant/ErrorCodeConstants.java,**/b2cmall-modules-biz/**/*.java,**/b2cmall-orch/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 错误码 `message` 仅供开发排查与日志，禁止作为面向用户的唯一提示；终端文案走统一响应的提示字段
+
+### 错误码定义位置
+
+- 跨模块共享错误码定义在**对应 `b2cmall-module-*-api` 模块**的 `enums/ErrorCodeConstants` 接口中（多子域按子域各有一个，如 `marketing/coupon/enums`）
+- 仅本 biz 内部使用的错误码可放 biz 模块 `constant/ErrorCodeConstants`
+- biz 与 orch 层**只引用、不重定义** api 模块常量
+- orch 层编排错误码可放本 orch 模块的 `enums/ErrorCodeConstants`
+
+```java
+// b2cmall-module-marketing-api/.../coupon/enums/ErrorCodeConstants.java
+public interface ErrorCodeConstants {
+    ErrorCode COUPON_SCOPE_PRODUCT_NOT_EXISTS = new ErrorCode("优惠券模块", 1_306_002_102, "指定单品不存在");
+}
+```
+
+- 使用 `com.zfn.framework.common.exception.ErrorCode` 的三参构造 `(String moduleName, int code, String message)`
+- 每段号段用注释 banner 标注占用范围
+
+### 抛异常方式
+
+统一静态导入 `ServiceExceptionUtil.exception`，**禁止** `throw new RuntimeException("...")` 或裸 `ServiceException`：
+
+```java
+import static com.zfn.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static com.b2cmall.module.marketing.coupon.enums.ErrorCodeConstants.COUPON_SCOPE_PRODUCT_NOT_EXISTS;
+
+throw exception(COUPON_SCOPE_PRODUCT_NOT_EXISTS);
+throw exception(ErrorCodeConstants.XXX, param1, param2);
+```
+
+- 全局异常被 `com.zfn.framework.web.core.handler.GlobalExceptionHandler` 统一转 `CommonResult.error(code, message)`
+
+### 号段登记与查重
+
+- 新增模块号段先在 `com.zfn.framework.common.exception.enums.ServiceErrorCodeRange` 登记区间，再到模块 `ErrorCodeConstants` 定义具体码
+- 新增错误码后应确认同模块内无重复编码
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

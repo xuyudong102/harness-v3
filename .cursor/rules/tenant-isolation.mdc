@@ -1,0 +1,94 @@
+---
+description: 多租户隔离规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 多租户隔离规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java,**/application*.yaml` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- ⚠️ 项目中禁止出现跨租户数据访问：所有查询/写入/更新/删除必须严格基于当前租户上下文执行；仅在明确的"忽略租户"场景且方法名带 `IgnoreTenantId`、并完成业务审批与风险说明时才允许
+- ⚠️ `ignore-urls`/`ignore-tables` 语义严格区分（见上方"两个配置的语义"章节）；命名只是线索，唯一权威是 `application.yaml`；禁止以"补配置"作为 bug 修复手段；AI 只审查不自动补配置
+
+SaaS 多租户架构下的隔离红线与"忽略租户 id"接入口的识别口径。涉及 API 入口、RPC 调用、MyBatis 持久化三个层面的横切关注点。
+
+### 基本红线
+
+- **禁止一切业务上的跨租户数据访问** — 所有查询/写入/更新/删除必须严格基于当前租户上下文执行
+- "跨租户查不到数据"的默认修复方向是**调用方传入正确的 tenantId**，不是去补 `ignore-urls` / `ignore-tables`
+- `ignore-urls` / `ignore-tables` **不是"申请跨租户的通道"**，详见下方识别口径
+
+### 项目配置前缀
+
+| 项目 | 配置前缀 | ignore-urls 示例 |
+|---|---|---|
+| broker | `broker.tenant` | `broker.tenant.ignore-urls` |
+| b2cmall | `zfn.tenant` | `zfn.tenant.ignore-urls`、`zfn.tenant.ignore-tables` |
+
+- 忽略租户方法以 `IgnoreTenantId` 结尾，并须在对端 biz 模块 `application.yaml` 同步登记 `ignore-urls`，禁止仅改代码不改配置
+- b2cmall SaaS 公共表（无 `tenant_id` 维度）登记在 `zfn.tenant.ignore-tables`（如 `oauth2_client`、`job_log`）
+
+### 两个配置的语义（必须区分）
+
+#### `tenant.ignore-urls` — 入口不从上下文读 tenantId
+
+位置：被调 biz 模块 `src/main/resources/application.yaml`（前缀见上方「项目配置前缀」表）
+
+正当使用场景：**本身不携带租户上下文的接入点**
+
+- MQ 消费者回调
+- 云商 / 三方系统异步回调
+- 开放给外部系统的 RPC
+
+进入业务后**必须由调用方在请求参数中显式传入 tenantId**，业务层按显式 tenantId 执行**租户内**查询 —— 这**不是**跨租户访问。
+
+#### `tenant.ignore-tables` — 表是 SaaS 公共数据
+
+位置：同上。
+
+正当使用场景：**该表无租户归属**，所有租户共享同一份数据
+
+- 字典表
+- 全局配置表
+- 跨租户共享的基础数据
+
+MyBatis 拦截器不会给该表追加 `tenant_id = ?`，读写时不需考虑租户维度。
+
+### 识别"是否真的忽略租户"的三步法
+
+唯一权威来源 = **被调 biz 模块 `application.yaml`**。按顺序检查：
+
+1. 查 `tenant.ignore-urls` → 声明了该 URL = "忽略上下文租户的接入口"（MQ / 三方 / 云商场景），走显式传入 tenantId
+2. 查 `tenant.ignore-tables` → 声明了该表 = "SaaS 公共数据"（无租户维度）
+3. 两者都未声明 → 属于普通租户隔离接口/业务表，**业务上的跨租户访问一律禁止**
+
+### 命名 ≠ 生效，生效 ≠ 允许跨租户
+
+- 方法名/DTO 名带 `IgnoreTenantId` / `NoTenantId` 只是命名约定，**不等于**跳过租户过滤
+- 即使 URL 已在 `ignore-urls` 中声明，也**不等于**允许跨租户查业务数据 —— 必须按显式传入的 tenantId 正常隔离
+
+### 禁止"补配置"作为 bug 修复手段
+
+- 出现"查不到数据" → 默认结论是"调用方应携带正确的 tenantId"，不是去补 `ignore-urls`
+- 业务表不得因为"想跨租户查"而追加到 `ignore-tables`
+- 新增 `ignore-urls` 仅当新增 MQ / 三方回调等入口时才允许
+- 新增 `ignore-tables` 仅当该表被业务明确认定为 SaaS 公共数据时才允许
+- 两种新增均须**业务审批**，PR 描述中附审批记录链接
+
+### AI 审查动作（硬性约束）
+
+1. 发现跨租户调用点 → 按"三步法"识别，唯一权威是 `application.yaml`
+2. 判"未忽略租户" → 向用户指出风险并反问：是否业务真的需要跨租户？是否应改为显式传入对方 tenantId？
+3. **不得擅自修改** `application.yaml` 的 `ignore-urls` / `ignore-tables`
+4. 遇到"命名与配置不一致"的历史接口，须显式提示用户此接口命名不标准、以配置为准
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

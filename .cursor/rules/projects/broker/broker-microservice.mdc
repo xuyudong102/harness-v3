@@ -1,0 +1,48 @@
+---
+description: broker 项目微服务模块体系结构（broker-* 模块）；在处理匹配文件或相关任务时使用
+globs: "**/broker-*/pom.xml,**/broker-modules-biz/**/*Application.java,**/broker-orch/**/*Application.java,**/broker-gateways/**/*Application.java"
+alwaysApply: false
+---
+
+# broker 微服务模块结构
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/broker-*/pom.xml,**/broker-modules-biz/**/*Application.java,**/broker-orch/**/*Application.java,**/broker-gateways/**/*Application.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 涉及模块命名时一律使用 `broker-*`，禁止沿用历史文档里的 `cloud-business-*` 写法
+
+> ⚠️ 项目实际 Maven 模块前缀为 **`broker-*`**，不存在 `cloud-business-*` 模块。groupId 框架/依赖层为 `com.broker.platform`，根聚合 `broker:broker`。
+
+### 顶层模块体系
+
+| 模块 | 职责 |
+|---|---|
+| `broker-dependencies` | 统一 BOM（`packaging=pom`），用 `${revision}` + flatten 管理版本 |
+| `broker-common-framework` | 框架底层 starter 与公共类（`broker-common`、`broker-spring-boot-starter-*`）；**修改须全员知晓** |
+| `broker-biz-framework` | 业务向 starter（mybatis / web / security / tenant / mq / http 等） |
+| `broker-modules-api` | 各业务模块的 Feign 契约 + DTO + `ErrorCodeConstants`（`broker-module-*-api`） |
+| `broker-modules-biz` | 各业务模块的核心实现（`broker-module-*-biz`，与 api 一一配对） |
+| `broker-orch` | 编排/接入层，承载 HTTP Controller（`broker-*-orch`） |
+| `broker-gateways` | Spring Cloud Gateway 边缘层，按渠道一应用（`broker-*-gateway`） |
+| `broker-scheduler-biz` | 调度/长连接消费服务（当前仅 `broker-websocket-scheduler`） |
+| `common-modules` | 公共业务模块与支付对接（`broker-common-module-*`、`common-module-pay/*`） |
+
+### 业务模块清单（api 与 biz 一一配对）
+
+`base`、`auth`、`member-user`、`operate-user`、`agent`、`user-collect`、`operate-wallet`、`product`、`listing`、`settlement`。
+
+### 约束
+
+- 公共 VO/Query/Exception/Enums 禁止在多个微服务包下重复定义；公共能力下沉到 `broker-common-framework` / `broker-biz-framework`
+- pom 采用**最小依赖原则**，无用依赖必须删除
+- 子模块依赖**不写版本号**，版本统一由 `broker-dependencies` BOM 的 `properties` 管理
+- `broker-common-framework` / `broker-biz-framework` 变更属于高风险操作，须评估对全模块影响后再提交
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

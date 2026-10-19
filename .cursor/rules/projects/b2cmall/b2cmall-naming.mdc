@@ -1,0 +1,33 @@
+---
+description: b2cmall 项目命名特化（Broker/Saas 对接前缀 / 一文件一类）约定；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall 项目命名特化
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/b2cmall/**/*.java,**/b2cmall-*/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 经纪商（broker）对接对象统一带 `Broker` 前缀；SaaS 租户侧对象统一带 `Saas` 前缀；DTO/VO 默认一文件一类，禁止用「类中类」承载可复用对象
+
+### 经纪商对接命名
+
+- ⚠️ 与 broker 系统同步/回调链路（如 `b2cmall-api-orch` 商品同步）使用的 Message/DTO/VO，类名须带 `Broker` 前缀（如 `BrokerSyncUpdateMallProductMessage`、`BrokerSyncUpdateMallProductReqDTO`），禁止无前缀命名导致与商城内部对象混淆
+
+### SaaS 租户侧命名
+
+- ⚠️ SaaS 租户账号/认证链路对象须带 `Saas` 前缀（如 `SaasAuthUserApi`、`SaasAuthLoginReqDTO`、`SaasOAuth2TokenService`），与 C 端/商家端对象区分
+
+### 一文件一类
+
+- ⚠️ 尽量避免「类中类」定义 DTO/VO（尤其对接 broker/SaaS 的对象）；默认一文件一类，嵌套类仅在强绑定且不可复用场景才允许，并需在代码注释说明原因
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

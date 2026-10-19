@@ -1,0 +1,43 @@
+---
+description: Agent 会话侧边栏标题自动命名；在 Agent 收到首条或可命名用户消息时通过内置 MCP rename_chat 设置标题
+globs:
+alwaysApply: false
+---
+
+# 会话标题自动命名
+
+## 适用范围
+
+- 适用于所有 Agent 会话；在用户发送首条或当前消息后立即执行，不等待任务完成。
+
+## 强制规则
+
+- 本 Rule 不再默认加载，`beforeSubmitPrompt` 也不再注入重命名指令。
+- 用户要求重命名，或 Agent 按需读取本 Rule 后，可调用内置 MCP `cursor-app-control` 的 `rename_chat`。
+- 每个会话仅重命名一次；若当前标签已是提取出的标题则跳过
+- 重命名在回复用户正文前完成，不在正文中说明「已重命名」除非 `rename_chat` 失败
+- 用户若弹出 MCP 授权，须允许 `cursor-app-control` / `rename_chat`（拒绝会导致标题仍为英文自动摘要）
+
+### 标题提取
+
+按优先级从用户消息提取 `title`：
+
+1. 行首 Issue Key 且**同行含中文**（如 `BTOC-1471 【C端商城】品鉴大师...`）→ 保留整行，最多 40 字符（**保留中文，禁止落成英文摘要**）
+2. 行首仅 Issue Key、无中文 → 仅用 Key，转大写
+3. ONES 链接：`ones.cn.../issue/([A-Z][A-Z0-9]+-\d+)` → 该 Key
+4. 含 `ones.cn` 且文中有 `\b([A-Z][A-Z0-9]+-\d+)\b` → 第一个 Key
+5. 否则取首行非 URL、含中文的文本，最多 40 字符
+
+无法提取时跳过，不调用 `rename_chat`。
+
+### MCP 调用
+
+- 服务器：`cursor-app-control`（Cursor 内置，**无需**写入 `.cursor/mcp.json`）
+- 工具：`rename_chat`
+- 参数：`{ "title": "<提取结果>" }`
+- 失败时继续任务，不向用户阻断流程
+
+## 验证清单
+
+- 确认 ONES 粘贴格式会话侧边栏显示 **中文标题**（如 `BTOC-1471 【C端商城】品鉴大师推广订单...`），而非 `BTOC-1471 promotion order` 等英文自动摘要。
+- 确认未向 `.cursor/mcp.json` 添加 `cursor-app-control` 配置。

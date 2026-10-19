@@ -1,0 +1,41 @@
+---
+description: b2cmall 业务模块包骨架（api/service/dal/convert/mq 包树）约定；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall 业务模块包骨架
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/b2cmall-modules-biz/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 新增业务模块时按上述包骨架落位；多子域模块（如 marketing 下 coupon/distribution）先分子域再重复结构
+
+单领域模块平铺；多子域模块先按子域再重复下列结构（以 `marketing/coupon` 为例）：
+
+```
+com.b2cmall.module.{domain}[.{subdomain}]
+├── api/                       # *ApiImpl（Feign 实现）
+├── service/{entity}/          # XxxService + XxxServiceImpl
+├── service/{entity}/support/  # 本域 Support / Helper（禁止跨域 RPC）
+├── convert/{entity}/          # MapStruct XxxConvert
+├── dal/dataobject/{entity}/   # XxxDO
+├── dal/mysql/{entity}/        # XxxMapper
+├── dal/redis/                 # RedisKeyConstants + {entity}/XxxRedisDAO（如有）
+├── mq/{message,producer,consumer}/
+├── job/                       # 定时任务（如有）
+├── enums/                     # 本域枚举
+└── constant/                  # 本域常量 / biz 侧 ErrorCodeConstants（如有）
+```
+
+- Service 实现类直接放 `service/{entity}/XxxServiceImpl`，**不建** `service/impl/` 子包
+- Orch 层跨域组装类命名 `*OrchSupport`，放 `b2cmall-orch/.../service/{domain}/support/`
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

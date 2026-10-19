@@ -1,0 +1,69 @@
+---
+description: broker 项目登录用户/租户上下文获取（SecurityFrameworkUtils / WebFrameworkUtils / TenantContextHolder）约定；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# broker 上下文获取约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/broker/module/**/*.java,**/com/broker/orch/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 严禁在 Service/Controller 业务逻辑里直接 `request.getHeader("tenant_id")` 之类手读上下文；统一走上述工具类，便于 RPC/异步链路上下文透传一致
+
+业务代码获取「当前登录用户 / 租户 / 平台」一律走框架工具类，**禁止**自己从 `HttpServletRequest` 读 header、解析 token，或手动透传租户。
+
+### 登录用户（业务/服务层）
+
+用 `com.broker.framework.security.core.util.SecurityFrameworkUtils`：
+
+```java
+LoginUser user = SecurityFrameworkUtils.getLoginUser();
+Long userId = SecurityFrameworkUtils.getLoginUserId();
+Long companyId = SecurityFrameworkUtils.getLoginCompanyId();
+Integer platformType = SecurityFrameworkUtils.getLoginPlatformType(); // 1=保荐/供应, 2=经纪/采购
+```
+
+- ⚠️ `LoginUser` 取用户主键是 `getUserId()`，不是 `getId()`，引用前先核对方法名
+- 网关层（`com.broker.gateway.*`）另有同名工具类，仅限网关 filter 使用；业务/orch/biz 代码用 `com.broker.framework.*` 这套
+
+### Web 请求信息
+
+用 `com.broker.framework.web.core.util.WebFrameworkUtils`（仅在 Web/接入层需要原始请求信息时）：
+
+```java
+Long tenantId = WebFrameworkUtils.getTenantId(request);       // header: tenant_id
+Integer platformType = WebFrameworkUtils.getPlatformType(request); // header: Platform-Type
+boolean isRpc = WebFrameworkUtils.isRpcRequest(request);      // 以 /rpc-api 开头
+```
+
+- header 名是常量（`HEADER_TENANT_ID = "tenant_id"`、`HEADER_PLATFORM_TYPE = "Platform-Type"`），**禁止**业务里写裸字符串读 header
+
+### 租户上下文
+
+用 `com.broker.framework.tenant.core.context.TenantContextHolder` 与 `TenantUtils`：
+
+```java
+Long tenantId = TenantContextHolder.getTenantId();
+Long required = TenantContextHolder.getRequiredTenantId();
+
+TenantUtils.execute(tenantId, () -> { /* 指定租户内执行 */ });
+TenantUtils.executeIgnore(() -> { /* 忽略 MyBatis 租户过滤 */ });
+```
+
+- MQ 消费 / 定时任务 / 三方回调等无上下文场景，按显式 `tenantId` 用 `TenantUtils.execute(...)` 恢复；DB 层临时跳过租户过滤用 `@TenantIgnore`
+- 跳过租户过滤不等于允许跨租户查业务数据 —— 仍须按显式 `tenantId` 做租户内隔离
+
+### 部署 SQL 的站点租户解析
+
+- `broker4operate_user_v2.opr_tenant.site_flag` 的语义为 `0=非站点租户、1=站点租户`
+- Broker 正式部署 SQL 需要定位站点租户时，使用 `site_flag = 1 AND deleted = 0` 的标量查询在脚本前部解析 `tenantId`；禁止硬编码某一环境的租户 ID，也禁止用 `LIMIT 1` 掩盖异常的多租户匹配
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

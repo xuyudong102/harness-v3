@@ -1,0 +1,34 @@
+{
+  "schema": "apifox-openapi-project/v1",
+  "project": {
+    "label": "example-project",
+    "name": "Example API",
+    "apifoxProjectId": "1001",
+    "teamId": "2001",
+    "branch": "main"
+  },
+  "services": [
+    {
+      "name": "catalog-service",
+      "aliases": ["catalog"],
+      "source": { "type": "direct", "url": "https://example.invalid/catalog/openapi.json" },
+      "namespace": "catalog",
+      "environment": "dev"
+    }
+  ],
+  "environments": [
+    {
+      "key": "dev",
+      "name": "DEV",
+      "baseUrl": "https://dev.example.invalid",
+      "headers": [
+        { "name": "Authorization", "valueFromVariable": "DEV_AUTHORIZATION", "description": "Runtime-managed authorization" }
+      ]
+    }
+  ],
+  "contract": {
+    "allowedPathPrefixes": ["/v1/"],
+    "forbiddenPathPrefixes": ["/proxy/"]
+  },
+  "runtime": { "manifestIdentity": "example-project" }
+}

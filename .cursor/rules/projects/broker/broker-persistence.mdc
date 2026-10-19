@@ -1,0 +1,71 @@
+---
+description: broker 业务模块持久化栈（BaseDO / BaseMapperX / Convert / 事务）约定；在处理匹配文件或相关任务时使用
+globs: "**/com/broker/module/**/dal/**/*.java,**/com/broker/module/**/convert/**/*.java"
+alwaysApply: false
+---
+
+# broker 持久化栈
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/broker/module/**/dal/**/*.java,**/com/broker/module/**/convert/**/*.java,**/com/broker/module/**/service/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 依赖注入统一用 `@Resource`，与项目既有风格保持一致
+
+### DataObject（DO）
+
+- 全部继承 `com.broker.framework.mybatis.core.dataobject.BaseDO`，复用其 `creator/createTime/updater/updateTime/deleted`，**禁止重复定义这些审计字段**
+- 命名 `{Entity}DO`，置于 `dal/dataobject/{entity}/`
+- 主键 MySQL 用雪花：`@TableId(value="id", type=IdType.ASSIGN_ID)`
+- 表名占用关键字时用反引号：`@TableName("`order`")`
+- 标准 Lombok：`@Data @Builder @NoArgsConstructor @AllArgsConstructor @Accessors(chain=true) @EqualsAndHashCode(callSuper=true)`
+
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Accessors(chain = true)
+@EqualsAndHashCode(callSuper = true)
+@TableName("`order`")
+public class OrderDO extends BaseDO {
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    private Long id;
+    @TableField("tenant_id")
+    private Long tenantId;
+}
+```
+
+### Mapper
+
+- 继承 `com.broker.framework.mybatis.core.mapper.BaseMapperX<T>`，**禁止**直接用 MyBatis-Plus 原生 `BaseMapper`
+- 条件构造统一用 `com.broker.framework.mybatis.core.query.LambdaQueryWrapperX<T>`
+- 简单查询写 `default` 方法；联表/聚合/分页走 XML，参数加 `@Param`
+- 命名 `{Entity}Mapper`，置于 `dal/mysql/{entity}/`，类上加 `@Mapper`
+
+### Convert（对象转换）
+
+- 统一 MapStruct，单例 `INSTANCE`，**禁止手写 `new` 转换或字段逐个 set**
+- 命名 `{Entity}Convert`，置于 `convert/{entity}/`；方法名带方向，如 `convertToOrderRespDTO` / `convertToOrderDO` / `convertToOrderRespDTOList`
+- 调用：`OrderConvert.INSTANCE.convertToOrderRespDTO(orderDO)`
+
+```java
+@Mapper(builder = @Builder(disableBuilder = true))
+public interface OrderConvert {
+    OrderConvert INSTANCE = Mappers.getMapper(OrderConvert.class);
+    OrderRespDTO convertToOrderRespDTO(OrderDO orderDO);
+}
+```
+
+### 事务
+
+- 本地事务：`@Transactional(rollbackFor = Throwable.class)`
+- 跨服务写操作：`@GlobalTransactional(rollbackFor = Throwable.class)`（Seata）
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

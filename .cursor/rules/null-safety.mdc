@@ -1,0 +1,63 @@
+---
+description: Null 安全规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# Null 安全
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 判空禁止直接使用 `== null` / `!= null`，统一使用工具方法如 `Objects.isNull()`、`Objects.nonNull()`、`ObjectUtil.isNull()` 或 `CollUtil.isEmpty()` 等
+
+### 基本原则
+
+1. **优先使用 Optional** — 方法返回值可能为空时，使用 `Optional<T>` 而非返回 null
+2. **参数非空校验** — 公共方法入口处校验参数非空（使用 `Objects.requireNonNull` 或框架注解）
+3. **禁止返回 null 集合** — 返回空集合 `Collections.emptyList()` 代替 null
+
+### 注解使用
+
+- `@NonNull` / `@Nullable` — 标注方法参数和返回值的空值语义
+- 优先使用 `jakarta.annotation` 或 `org.springframework.lang` 包下的注解
+
+### Optional 使用规范
+
+- 仅用于方法返回值，不用于字段、方法参数或集合元素类型
+- 禁止 `optional.get()` 不做 `isPresent()` 检查
+- 优先使用 `orElse`、`orElseThrow`、`map`、`flatMap` 链式调用
+
+### 常见模式
+
+```java
+// ✅ 推荐
+public Optional<User> findByEmail(String email) { ... }
+
+// ✅ 推荐
+List<User> users = userMapper.selectAll(); // 返回空列表，不返回 null
+
+// ❌ 禁止
+if (obj != null && obj.getXxx() != null && obj.getXxx().getYyy() != null) ...
+// ✅ 使用 Optional 链式调用替代深层 null 检查
+```
+
+### AI 易忽略的 NPE 防护
+
+- **equals 用常量或确定有值的对象调用** — `"test".equals(param)` 而非 `param.equals("test")`；推荐 `Objects.equals(a, b)`
+- **switch 对 String 外部参数先判 null** — `switch(param)` 当 param 为 null 时直接 NPE，必须前置 null 检查
+- **三目运算符自动拆箱 NPE** — `Integer result = (flag ? a * b : c)` 当 c 为 null 时，因类型对齐拆箱触发 NPE
+- **集合 `isNotEmpty` 不保证元素非 null** — 取出元素后仍需判空
+- **RPC/远程调用返回对象一律判空** — 不可信任外部返回
+- **基本类型返回包装类型时的拆箱** — `public int method() { return Integer对象; }` 若为 null 则 NPE
+- **`addAll()` 前须判断入参集合是否为 null** — `ArrayList#addAll` 对 null 入参直接抛 NPE
+- **高并发场景避免用"等于"判断退出** — 用 `>=` 或 `<=` 区间判断代替 `==`，防止被"击穿"
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

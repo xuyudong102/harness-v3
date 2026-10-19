@@ -1,0 +1,100 @@
+---
+description: 数据库规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 数据库规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.sql,**/*Mapper*.java,**/*Mapper*.xml` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+### 变更脚本存放（制品目录）
+
+- Workflow 任务内所有**可独立执行**的 DDL、DML、数据回填/订正脚本须写入 `{artifact_root}/design/sql/`（与 `design/ddl.md` 配套）；无 `design/ddl.md` 的 Bugfix/临时订正可写入 `{artifact_root}/delivery/sql/`
+- `design/ddl.md` 须用「脚本文件」表列出 `design/sql/` 下各文件的路径、用途与建议执行顺序；**可执行 SQL 以 `.sql` 文件为准**，Markdown 内联块仅作摘要，不得与脚本文件冲突
+- **禁止**在业务仓库新增或修改独立变更脚本（如模块 `sql/`、`db/migration/`、Flyway/Liquibase 目录、`src/**` 下的 `.sql`）；Mapper XML 内的 `#{}` 动态 SQL 除外
+- 接口添加了权限注解时，必须同步生成对应的菜单权限 DML（INSERT INTO 菜单表），脚本文件放在 `{artifact_root}/design/sql/`（命名建议含 `menu` 或 `permission`），并在 `design/ddl.md` 或 `delivery/change-manifest.md` 中引用
+- 字段名长度不超过 20 字符，超长使用公认缩写（如 number→num、image→img）
+- `id` 字段统一 `bigint unsigned`；金额类 `decimal`，小数位按业务（通常 8 位）
+- 单表超 500 万行或 2GB 才考虑分库分表；字段冗余须满足：非频繁修改、非 varchar 超长、非唯一索引字段
+- 禁止 MySQL `WITH RECURSIVE`；`in` 集合元素 ≤ 1000；数据订正前先 select 确认
+- ⚠️ 编写 DDL / 数据迁移脚本 / 涉及表字段的业务逻辑前，**必须先 Read 对应的 Entity (`*DO.java`) 确认物理字段**是否存在、类型、所在表；禁止按"业务名称"推断字段（典型反例：假设 `agreement` 表有 `supplier_id`，实际该字段在 `agreement_attribution` 且语义为 `member_id`；假设有 `broker_yunshang_code`，实际分布在两张表）。跨表字段必须 JOIN 到真实来源表，不得冗余假设字段
+
+### 命名规范
+
+- **表名** — 小写字母或数字，下划线分隔，**使用名词单数**（如 `user_order` 而非 `user_orders`），禁止数字开头和两个下划线间只出现数字
+- **字段名** — 小写下划线（如 `create_time`、`user_name`），禁止大写字母
+- **是否概念字段** — **不使用 `is_` 前缀**（项目约定，区别于阿里巴巴手册 `is_xxx`），类型 `bit(1)`（0=否，1=是），如 `deleted`、`enabled`；对应 POJO 布尔属性同样禁止 `is` 前缀（如 `deleted` 而非 `isDeleted`），避免框架反序列化属性名不一致
+- **非负数字段** — 必须声明为 `unsigned`
+- **索引命名** — 主键 `pk_字段名`、唯一索引 `uk_字段名`、普通索引 `idx_字段名`
+- **表命名建议** — `业务名称_表的作用`（如 `trade_config`）
+- **库名与应用名尽量一致**
+- **禁用保留字** — 如 `desc`、`range`、`match`、`delayed` 等
+
+### 建表规约
+
+- **表必备六字段**（字符集统一 `utf8mb4 COLLATE utf8mb4_general_ci`）：
+  - `id` BIGINT 主键自增
+  - `creator` VARCHAR(64) NULL DEFAULT NULL — 创建者
+  - `create_time` DATETIME NOT NULL — 创建时间
+  - `updater` VARCHAR(64) NULL DEFAULT NULL — 更新者
+  - `update_time` DATETIME NOT NULL — 更新时间
+  - `deleted` BIT(1) NOT NULL DEFAULT b'0' — 是否删除，0否 1是
+- **小数用 decimal** — 禁止使用 `float` 和 `double`，存在精度损失
+- **字符串长度** — varchar 不超过 5000；超过用 text 类型独立成表
+- **定长字符串用 char** — 如存储的值长度几乎相等
+- **逻辑删除** — 禁止物理删除，使用 `deleted`（`bit(1)`）字段标记，0=未删除，1=已删除
+- **禁止物理删除操作** — 须逻辑删除
+- **表名不使用复数名词**
+- **单表行数超过 500 万或容量超过 2GB** 才推荐分库分表
+- **字段注释** — 修改字段含义或追加状态时须及时更新注释
+
+### SQL 规约
+
+- **必须使用参数绑定 `#{}`** — 禁止 `${}` 和字符串拼接 SQL，防止 SQL 注入
+- **禁止 SELECT *** — 明确列出需要的字段，减少网络消耗和解析成本
+- **count 用 `count(*)`** — 不用 `count(列名)` 或 `count(常量)`，`count(*)` 是 SQL92 标准
+- **sum() 注意 NPE** — 全 NULL 列 `sum()` 返回 NULL，须用 `IFNULL(SUM(column), 0)`
+- **判断 NULL 用 `ISNULL()`** — `NULL <> NULL` 返回 NULL 而非 false
+- **分页先 count** — 若 count 为 0 直接返回，不执行后续分页语句
+- **禁止外键与级联** — 一切外键约束在应用层解决，不适合分布式高并发场景
+- **禁止存储过程** — 难以调试、扩展和移植
+- **多表查询列名前加表别名** — 防止字段名冲突抛 1052 异常
+- **更新记录时必须同时更新 `update_time`** — 设为当前时间
+- **禁止写大而全的更新接口** — 不要无差别 `update set` 所有字段，只更新有改动的字段
+- **超过三个表禁止 JOIN** — 关联字段数据类型一致且有索引
+- **varchar 索引须指定长度** — 一般长度 20 的索引区分度达 90%+
+
+### 正式提测/生产 SQL 交付
+
+- 将正式提测/生产 SQL 作为 deployment artifact：只保留实际需要执行的 `SET`、DDL、DML 和简洁业务注释，调试语句与执行后回查不得混入交付脚本
+- 初始化菜单、权限和其他要求跨环境一致的主数据时使用评审确认的固定 ID；禁止用 `UUID_SHORT()`、随机数或当前环境数据动态生成正式主数据 ID
+- 环境相关 ID 优先按稳定业务标识在脚本前部解析一次并保存为变量，禁止硬编码某一环境的 ID，也不要在每条 `INSERT` 中重复嵌套查询
+- 正式 deployment SQL 仅在值随部署环境变化、需要按当前环境动态解析，且同一动态计算结果会被多条 DML 复用、使用变量能明显减少重复查询并提高可读性时，才使用 session variable（如通过稳定业务标识解析的 `@tenant_id`）
+- `creator`、`updater`、operator name、固定 remark、固定业务标识字符串以及跨环境一致的 ID、permission、path 等固定常量必须直接写值；禁止为形式统一先 `SET @xxx` 再引用，避免不必要的 session 状态及拆分执行时变量丢失
+- 预期唯一的业务标识使用标量查询保持唯一性失败可见；禁止用 `LIMIT 1` 悄悄吞掉多条匹配记录
+- 初始化记录的 `INSERT` 优先使用明确的 `VALUES`；只有真实的数据迁移需要从源数据派生目标行，且符合项目部署约定时才使用 `INSERT ... SELECT`
+- 执行后验证属于独立 evidence；正式交付 SQL 不包含仅用于验证的 `SELECT`、`COUNT` 或结果展示语句
+- 不为形式上的绝对幂等引入 `INSERT ... SELECT ... WHERE NOT EXISTS` 等复杂结构；是否使用 `INSERT IGNORE`、`ON DUPLICATE KEY UPDATE` 或其他幂等形式，以项目真实部署规范为准
+- PRE / PROD SQL 的审核、授权与执行继续遵守现有 Human Checkpoint 和数据库安全边界
+
+### 索引规约
+
+- **业务唯一字段必须建唯一索引** — 包括组合字段
+- **组合索引区分度最高的在最左边**；存在非等号与等号混合条件时，**等号列前置**（如 `where c>? and d=?` 建 `idx_d_c`）
+- **页面搜索禁止左模糊和全模糊** — 走搜索引擎
+- **防止字段类型隐式转换导致索引失效**
+- **【推荐】order by 利用索引有序性** — 组合索引中 order by 字段放组合顺序最后，避免 filesort
+- **【推荐】覆盖索引** — 查询尽量 using index，避免回表
+- **【推荐】超多分页** — 先定位 id 段再关联，避免大 offset
+- **【推荐】SQL 性能目标** — 至少 range，要求 ref，最好 const
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

@@ -1,0 +1,128 @@
+<!--
+  Java 单元测试覆盖率门禁 — Maven 插件片段
+  阈值对齐 testing.mdc / test-guard.mdc：行覆盖 ≥ 78%，分支覆盖 ≥ 65%
+  接入说明见同目录 maven-test-coverage-integration.md
+-->
+
+<!-- ========== 1. properties（写入 BOM 的 <properties>） ========== -->
+<!--
+    <jacoco-maven-plugin.version>0.8.11</jacoco-maven-plugin.version>
+    <maven-surefire-plugin.version>3.2.2</maven-surefire-plugin.version>
+    <junit-jupiter.version>5.10.1</junit-jupiter.version>
+    <mockito.version>5.7.0</mockito.version>
+    <assertj.version>3.24.2</assertj.version>
+-->
+
+<!-- ========== 2. test 依赖（写入 BOM 的 <dependencyManagement>，子模块 scope=test 引用） ========== -->
+<!--
+    <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junit-jupiter.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-core</artifactId>
+        <version>${mockito.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-junit-jupiter</artifactId>
+        <version>${mockito.version}</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>${assertj.version}</version>
+        <scope>test</scope>
+    </dependency>
+-->
+
+<!-- ========== 3. pluginManagement（写入 BOM 的 <build><pluginManagement>） ========== -->
+
+<!-- Surefire：JUnit 5 + 与 JaCoCo 共享 argLine -->
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-surefire-plugin</artifactId>
+    <version>${maven-surefire-plugin.version}</version>
+    <configuration>
+        <parallel>methods</parallel>
+        <threadCount>4</threadCount>
+        <forkCount>2C</forkCount>
+        <reuseForks>true</reuseForks>
+        <argLine>@{argLine} -Xmx1024m</argLine>
+        <failIfNoTests>false</failIfNoTests>
+    </configuration>
+</plugin>
+
+<!-- JaCoCo：prepare-agent + report + check（verify 阶段阻断） -->
+<plugin>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <version>${jacoco-maven-plugin.version}</version>
+    <executions>
+        <execution>
+            <id>prepare-agent</id>
+            <goals>
+                <goal>prepare-agent</goal>
+            </goals>
+        </execution>
+        <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+                <goal>report</goal>
+            </goals>
+        </execution>
+        <execution>
+            <id>check</id>
+            <phase>verify</phase>
+            <goals>
+                <goal>check</goal>
+            </goals>
+            <configuration>
+                <rules>
+                    <rule>
+                        <element>BUNDLE</element>
+                        <limits>
+                            <limit>
+                                <counter>LINE</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.78</minimum>
+                            </limit>
+                            <limit>
+                                <counter>BRANCH</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.65</minimum>
+                            </limit>
+                        </limits>
+                    </rule>
+                </rules>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+
+<!-- ========== 4. 聚合 POM 激活（写入各层父 pom 的 <build><plugins>，无需重复 version） ========== -->
+<!--
+    <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+    </plugin>
+    <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+    </plugin>
+-->
+
+<!-- ========== 5. 存量过渡 profile（可选，覆盖率未达标前启用 report-only） ========== -->
+<!--
+  在 BOM 中增加 profile id=coverage-report-only：
+  - 仅保留 prepare-agent + report execution
+  - 移除 check execution
+  本地/CI 使用：mvn test -Pcoverage-report-only
+  达标后删除该 profile，改用默认 verify + check。
+-->

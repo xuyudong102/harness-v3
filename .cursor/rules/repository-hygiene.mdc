@@ -1,0 +1,70 @@
+---
+description: Git 仓库卫生规范；在初始化仓库、创建或修改 .gitignore、准备提交时按需使用
+globs: "**/.gitignore"
+alwaysApply: false
+---
+
+# Git 仓库卫生规范
+
+## 适用范围
+
+- 初始化 Git 仓库、创建或修改 `.gitignore`、准备暂存或提交时使用。
+- 发现 IDE 元数据、构建产物、本地配置或运行数据进入工作区时使用。
+- 现有项目的明确版本控制约定优先；不得用通用默认项覆盖项目已确认需要跟踪的资源。
+
+## 强制规则
+
+### 默认忽略项
+
+创建新项目的 `.gitignore` 时，保留已有有效规则，并默认包含：
+
+```gitignore
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build and dependencies
+node_modules/
+target/
+build/
+
+# System
+.DS_Store
+
+# Local configuration
+.env
+*.local
+
+# Runtime data
+logs/
+runtime/
+reports/
+state/
+```
+
+- 如果项目明确需要跟踪上述目录中的共享配置、报告或状态契约，使用更精确的路径或否定规则，并记录原因。
+- 不得把 `.env.example` 等无敏感信息的配置样例误判为 `.env` 运行配置。
+
+### 提交前检查
+
+- 使用 `git status --short` 核对未跟踪、暂存和已修改文件。
+- 使用 `git check-ignore -v -- <path>` 核对可疑文件由哪条规则忽略。
+- 使用 `git ls-files -ci --exclude-standard` 检查已经 tracked、但现在应被忽略的文件。
+- 如果上一步有输出，先向用户列出精确路径；需要从索引移除时，提示对确认的路径执行 `git rm -r --cached -- <path>`，不得删除工作区文件。
+- 暂存时使用精确路径，禁止为了方便而把未审查的 IDE 文件、运行数据或本地配置一并提交。
+
+## 禁止事项
+
+- 禁止覆盖或清空已有 `.gitignore`。
+- 禁止使用可能隐藏业务源码、测试、构建配置或正式文档的宽泛规则。
+- 禁止仅因文件已被 ignore 就断言其未被 Git 跟踪。
+- 禁止未经确认执行 `git rm --cached`，或使用未解析的 glob、变量和宽泛目录作为目标。
+- 禁止提交包含密钥、Token 或本机专属路径的本地配置。
+
+## 验证清单
+
+- `.gitignore` 保留项目已有规则，并覆盖适用的 IDE、构建、系统、本地配置和运行数据。
+- `git status --short` 中不存在计划外的生成文件或本地文件。
+- `git ls-files -ci --exclude-standard` 无输出，或其输出已逐项确认并处理。
+- staged 内容只包含本次明确授权提交的文件。

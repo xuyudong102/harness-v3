@@ -1,0 +1,65 @@
+---
+description: b2cmall 项目 XXL-Job 定时任务（@XxlJob / @XxlJobIdempotent / @TenantJob）约定；在处理匹配文件或相关任务时使用
+globs: "**/com/b2cmall/**/job/**/*.java"
+alwaysApply: false
+---
+
+# b2cmall 定时任务约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/b2cmall/**/job/**/*.java,**/*Job.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- `@XxlJob` 的 handler 名、`@XxlJobIdempotent` 的 jobHandler 名必须与 XXL-Job 控制台注册保持一致；handler 名优先定义在 `*-api` 模块的 `*Jobs` 常量类（如 `CouponJobs`）
+
+定时任务基于 XXL-Job（starter：`zfn-spring-boot-starter-job`），任务类落在 `*-biz` 或 `*-orch` 的 `job/` 包，写成 `@Component`，不继承框架基类。
+
+### 两段式结构（入口 + 业务）
+
+- **入口方法**标 `@XxlJob("handlerName")`，名字与控制台 handler 一致，方法体保持极薄
+- **业务方法**标 `@XxlJobIdempotent(...)` 承载真正逻辑，入参用 `com.zfn.module.joblog.dto.XxlJobReqDTO`（含 `tenantId/startTime/endTime`）
+- 入口通过 `SpringUtil.getBean(本类.class).业务方法(...)` 自调用，确保幂等/AOP 切面生效
+
+```java
+@Component
+public class UserCouponExpireJob {
+    private static final String JOB_NAME = CouponJobs.USER_COUPON_EXPIRE;
+
+    @XxlJob(JOB_NAME)
+    @TenantJob
+    public void execute() {
+        SpringUtil.getBean(UserCouponExpireJob.class)
+                .userCouponExpire(XxlJobReqDTO.builder()
+                        .tenantId(TenantContextHolder.getTenantId()).build());
+    }
+
+    @XxlJobIdempotent(jobHandler = JOB_NAME, jobName = "过期单券切换已失效")
+    public void userCouponExpire(XxlJobReqDTO xxlJobReqDTO) {
+        CouponJobScanResult result = couponUserJobService.userCouponExpire();
+        CouponJobReportSupport.report(JOB_NAME, JOB_DESC, result);
+    }
+}
+```
+
+### 多租户任务
+
+- 需要遍历所有租户执行的任务标 `@TenantJob`（`com.zfn.framework.tenant.core.job.TenantJob`），任务体内通过 `XxlJobReqDTO.tenantId` / `TenantContextHolder` 拿到当前租户
+- 不带 `@TenantJob` 的任务自行通过 `XxlJobReqDTO` 显式传 `tenantId`，禁止裸跑导致跨租户
+
+### 日志与产物
+
+- 任务内用 SLF4J 记录阶段化入参/出参与 `costMs`；复杂域可复用 `*JobLogSupport`、`*JobReportSupport`
+- 重逻辑委托给 `*ServiceImpl` 的方法，任务类只做编排与 XXL 控制台结果上报
+
+### 落位
+
+- 本域数据扫描/状态流转 Job 优先放对应 `*-biz` 模块（如 `marketing-biz/job`）
+- 跨域编排、提醒类 Job 可放 `*-orch`（如 `tenant-orch/job`、`buyer-orch/job`）
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

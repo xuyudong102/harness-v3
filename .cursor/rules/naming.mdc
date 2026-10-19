@@ -1,0 +1,66 @@
+---
+description: Java 命名约定；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 命名约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- ⚠️ 禁止在代码中使用全限定类名（如 `com.broker.orch.businessfrontend.controller.admin.order.vo.resp.OrderSubmitRespVO`）——必须在文件头部添加 `import` 语句，方法签名、变量声明、泛型参数等一律使用短类名；仅当同包下存在同名类冲突时才允许全限定，且需加注释说明原因
+
+### 基本规则
+
+- **禁止以下划线或美元符号开始/结束命名** — 如 `_name`、`name$`
+- **禁止拼音与英文混合、禁止中文命名** — 国际通用名称（如 alibaba、taobao）可视同英文
+- **禁止种族歧视性或侮辱性词语** — 使用 `blockList`/`allowList` 替代 `blackList`/`whiteList`，禁止 `slave` 等
+- **类名** — PascalCase（如 `UserService`、`OrderController`）；DO/PO/DTO/BO/VO/UID 等保持约定大小写
+- **方法名** — camelCase（如 `findById`、`calculateTotal`）
+- **常量** — UPPER_SNAKE_CASE（如 `MAX_RETRY_COUNT`）
+- **包名** — 全小写，点分隔仅一个语义单词，**使用单数形式**（如 `com.example.user.util`）
+- **变量名** — camelCase，语义明确，禁止单字母（循环变量除外）
+- **数组定义** — 类型与中括号紧挨：`int[] arrayDemo`，禁止 `String args[]`
+
+### 布尔变量
+
+- 方法返回布尔值或布尔局部变量可使用 `is`/`has`/`can`/`should` 前缀
+- **⚠️ POJO 类属性禁止加 `is` 前缀** — 如 `private Boolean deleted` 而非 `private Boolean isDeleted`，否则部分框架（Jackson、MyBatis 等）反序列化时解析错误
+
+### 特定后缀约定
+
+| 类型 | 后缀 | 示例 |
+|------|------|------|
+| 控制器 | Controller | UserController |
+| 服务接口 | Service | OrderService |
+| 服务实现 | ServiceImpl | OrderServiceImpl |
+| 数据访问 | Mapper | UserMapper |
+| 数据传输对象 | DTO | UserDTO |
+| 视图对象 | VO | UserVO |
+| 请求对象 | Request / Req | CreateUserRequest |
+| 响应对象 | Response / Resp | UserResponse |
+| 枚举 | Enum 后缀 | ProcessStatusEnum |
+| 抽象类 | Abstract / Base 开头 | AbstractHandler |
+| 异常类 | Exception 结尾 | OrderNotFoundException |
+| 测试类 | 被测类名 + Test | OrderServiceTest |
+
+### AI 易忽略的命名规则
+
+- **禁止拼音与英文混合命名** — 如 `DaZhePromotion`（打折）、`getPingfenByName()`（评分）
+- **杜绝不规范缩写** — 如 `AbsClass`（AbstractClass）、`condi`（condition），降低可读性
+- **常量命名须语义完整** — 用 `MAX_STOCK_COUNT` 而非 `MAX_COUNT`，不要嫌名字长
+- **Service/DAO 层方法命名规约** — `get` 获取单个、`list` 获取多个（复数结尾如 `listObjects`）、`count` 统计、`save/insert` 插入、`remove/delete` 删除、`update` 修改
+- **类型名词放词尾** — `startTime`/`workQueue`/`nameList`，而非 `startedAt`/`QueueOfWork`/`listName`
+- **设计模式体现在命名中** — `OrderFactory`、`LoginProxy`、`ResourceObserver`
+- **避免子父类成员变量同名** — 即使编译通过也会降低可理解性
+- **接口方法不加修饰符** — 接口中方法签名直接写 `void commit()`，不加 `public abstract`
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

@@ -1,0 +1,69 @@
+---
+description: Git 提交规范（Conventional Commits）；在所有 Agent 任务执行时持续生效
+globs:
+alwaysApply: false
+---
+
+# Git 提交规范
+
+## 适用范围
+
+- 适用于所有 Agent 任务，作为持续生效的工程约束。
+
+## 强制规则
+
+### Conventional Commits 格式
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### 类型（type）
+
+| 类型 | 说明 |
+|------|------|
+| feat | 新功能 |
+| fix | 缺陷修复 |
+| refactor | 重构（不改变外部行为） |
+| test | 测试相关 |
+| docs | 文档变更 |
+| style | 代码格式（不影响逻辑） |
+| chore | 构建/工具变更 |
+| perf | 性能优化 |
+
+### 规则
+
+- **原子提交** — 每个提交只做一件事，可独立编译和理解
+- **subject 不超过 72 字符**，使用中文祈使句（如「添加」而非「添加了」）
+- **body 用中文解释 why**，不解释 what（what 看 diff 即可）
+- 涉及破坏性变更时，footer 添加 `BREAKING CHANGE:` 说明（正文仍用中文）
+
+### 示例
+
+```
+feat(user): 注册时增加邮箱验证
+
+防止虚假账号批量注册；验证链接 24 小时内有效。
+```
+
+```
+fix(cart): 修复结算时库存校验遗漏
+
+并发下单场景下未二次校验 SKU 库存，导致超卖。
+```
+
+```
+refactor(rules): 将 git-commit 示例改为中文
+
+统一团队 commit message 语言，便于 SCM 生成与历史阅读对齐。
+```
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

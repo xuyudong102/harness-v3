@@ -1,0 +1,62 @@
+---
+description: b2cmall 项目 Feign RPC 契约（@FeignClient / ApiConstants / 结果解包）约定；在处理匹配文件或相关任务时使用
+globs: "**/b2cmall-modules-api/**/*Api.java,**/b2cmall-modules-biz/**/*ApiImpl.java,**/b2cmall-orch/**/RpcConfiguration.java"
+alwaysApply: false
+---
+
+# b2cmall Feign RPC 契约
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/b2cmall-modules-api/**/*Api.java,**/b2cmall-modules-biz/**/*ApiImpl.java,**/b2cmall-orch/**/RpcConfiguration.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- RPC/`*Api` 接口禁止返回 `Map`，必须用强类型 `*DTO`；忽略租户的方法以 `IgnoreTenantId` 结尾并在对端 `application.yaml` 的 `ignore-urls` 同步登记
+
+### `@FeignClient` 声明（强制带 url）
+
+每个 `b2cmall-module-*-api` 的 Feign 接口统一三要素：`name = ApiConstants.NAME` + `contextId = "接口类名"` + `url = "${feign.client.url.<服务名>:}"`。
+
+```java
+@FeignClient(name = ApiConstants.NAME, contextId = "OrderApi", url = "${feign.client.url.trade-biz-server:}")
+@Tag(name = "RPC 服务 - 订单")
+public interface OrderApi {
+    String PREFIX = ApiConstants.PREFIX + "/order";
+}
+```
+
+- **`url` 不可省略**：占位符默认空，便于按环境直连/走注册中心
+- `<服务名>` 取该模块 `ApiConstants.NAME`（= 对端 `spring.application.name`，如 `trade-biz-server`、`marketing-biz-server`）
+- `contextId` 取接口类名，保证同一 `name` 下多个 Feign 客户端 bean 不冲突
+- 路由前缀统一 `String PREFIX = ApiConstants.PREFIX + "/{业务}"`；`ApiConstants.PREFIX = RpcConstants.RPC_API_PREFIX + "/capa-layer/{模块}"`
+
+### ApiConstants（每个 api 模块一份）
+
+```java
+public class ApiConstants {
+    public static final String NAME = "trade-biz-server";
+    public static final String PREFIX = RpcConstants.RPC_API_PREFIX + "/capa-layer/trade";
+    public static final String VERSION = "1.0.0";
+}
+```
+
+### 接口与实现约定
+
+- `*Api` 方法返回值统一 `CommonResult<T>`；分页用 `CommonResult<PageResult<T>>`
+- biz 侧 `*ApiImpl` 实现 `*Api`，标 `@RestController`，仅做「转换 + 调 Service + `success(...)` 包装」
+- 新建 `*Api` 后，必须在调用方 orch 的 `RpcConfiguration` 的 `@EnableFeignClients(clients = {...})` 中登记
+
+### 调用方解包结果
+
+Feign 调用返回 `CommonResult<T>`，取数据用 `getCheckedData()`（错误时抛 `ServiceException`），禁止不校验直接 `getData()`：
+
+```java
+OrderDetailRespDTO order = orderApi.getDetail(id).getCheckedData();
+```
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

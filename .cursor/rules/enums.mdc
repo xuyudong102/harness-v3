@@ -1,0 +1,69 @@
+---
+description: Java 枚举类型规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 枚举规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 枚举必须与数据表对应：按表聚合为 `{TableName}Enum`，字段级枚举以嵌套子枚举形式内聚，不得为单个 DB 字段新建独立枚举类
+
+### 命名
+
+- 枚举类必须以 `Enum` 后缀（如 `ProcessStatusEnum`）
+- 数据库字段对应的枚举存放在以 `{数据表名}Enum` 命名的枚举文件中（如 `shopping_cart` 表 → `ShoppingCartEnum`）
+
+### 表枚举组织（嵌套子枚举）
+
+- 同一数据表的多个枚举字段，统一放在 `{表名驼峰}Enum` **一个文件**中，以**嵌套子枚举**组织（如 `OrderEnum.ContractTypeEnum`）；**禁止**为单个字段单独新建顶层枚举类
+- 新增字段枚举值时，在既有表枚举类中追加子枚举；**禁止**新建 `OrderStatusEnum`、`OrderTypeEnum` 等按字段拆分的独立文件
+- 子枚举命名：`{字段语义}Enum`（如 `order` 表 `contract_type` 字段 → `OrderEnum.ContractTypeEnum`）
+
+### 使用场景
+
+- **固定范围变化用 enum** — 存在延伸属性时优先 enum 而非魔法字符串
+- **枚举值必须全部被引用** — 禁止存在未使用的枚举常量；新增枚举值必须有对应的使用方，删除业务逻辑时须同步清理对应的枚举值
+
+### 编码与传输
+
+项目中所有枚举**一律使用 Integer 数字编码**（枚举类的 `code` 字段），**禁止在 VO/DTO/API 中使用字符串枚举名**。
+
+- **前后端传输使用数字** — 请求和响应中的枚举字段类型为 `Integer`，值为枚举类的 `code`
+- **VO/DTO 字段类型为 Integer** — 不使用 `String` 存储枚举值
+- **@Schema 注释中标注含义** — `@Schema(description = "合同类型: 1=纸质合同, 2=电子合同, 3=不签合同")`
+- **API 契约文档中标注映射关系** — 枚举定义表必须列出数字编码、含义、对应后端枚举类
+- **禁止在业务代码中使用魔法数字或字符串做枚举比较** — 使用枚举类的 `getCode()` 方法，switch/if 中不出现裸数字
+
+#### 禁止写法
+
+```java
+// ❌ 字符串枚举
+@Schema(description = "合同类型", example = "ELECTRONIC")
+private String contractType;
+
+// ❌ 字符串比较
+if ("PAPER".equals(contractType)) { ... }
+```
+
+#### 正确写法
+
+```java
+// ✅ 数字枚举
+@Schema(description = "合同类型: 1=纸质合同, 2=电子合同, 3=不签合同", example = "2")
+private Integer contractType;
+
+// ✅ 枚举常量比较
+if (OrderEnum.ContractTypeEnum.PAPER_CONTRACT.getCode().equals(contractType)) { ... }
+```
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

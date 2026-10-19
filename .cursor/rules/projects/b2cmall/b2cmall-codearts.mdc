@@ -1,0 +1,31 @@
+---
+description: b2cmall CodeArts DEV 账号、项目引用与流水线映射；在查询 B2C CI 或配置可发现性时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall CodeArts 路由
+
+## 适用范围
+
+- 任务目标为 B2C 后端，并需要查询 DEV 流水线或明确授权的 DEV 构建部署。
+- 操作语义使用 `.cursor/skills/codearts-pipeline/SKILL.md`，不复制流水线操作框架。
+
+## 强制规则
+
+- Harness 项目作用域为 `b2cmall`；B2C 的 CodeArts 账号归属 `broker`，显式使用 KooCLI profile `broker`。
+- Region 从 `broker` profile 当前配置核验；CodeArts Project 只通过 `custom.codeartsProjectId` 引用，不保存实际 ID 或凭据。
+- 目标环境为 `DEV`，Git 开发分支为 `feature/1.2.0.0`；每次运行前重新核对远程 source/branch 与实际 jobs。
+- B2C 共用 broker 账号不等于授权运行 Broker 业务流水线；操作范围只限当前任务指定的 B2C 目标。
+- 查询或配置可发现性不授权 Run、CI 构建、部署或共享流水线定义修改。
+
+- 当前 DEV/SIT 的 CodeArts Pipeline 和 Kubernetes 绑定只读取 Local Environment Profile：`~/.harness/runtime/profiles/b2cmall/<dev|sit>.json`，不从旧云端流水线名称推导本地环境。
+- Environment Profile 未确认、缺失或目标漂移时返回 `NEEDS_HUMAN`；不自动回退旧 dev，不按名称临时后缀猜测目标。
+- SIT 本轮只读；DEV 写入需当前任务目标确认和授权。旧云端记录保持历史可用，但不是当前环境默认路由。
+
+## 验证清单
+
+- 显式 profile、Region、Project 引用与精确流水线名称一致。
+- 已从真实 Pipeline sources 核对 B2C 业务仓库和共享依赖。
+- 未在资源中保存 AK、SK、Token、真实 Project ID 或 Pipeline ID。
+- Run 仅在另有当前 DEV 授权时执行。

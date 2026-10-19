@@ -1,0 +1,60 @@
+---
+description: broker 项目 XXL-Job 定时任务（@XxlJob / @XxlJobIdempotent / @TenantJob）约定；在处理匹配文件或相关任务时使用
+globs: "**/com/broker/**/job/**/*.java"
+alwaysApply: false
+---
+
+# broker 定时任务约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/broker/**/job/**/*.java,**/*Job.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- `@XxlJob` 的 handler 名、`@XxlJobIdempotent` 的 jobHandler 名必须与控制台注册保持一致，新增任务须同步在调度中心登记
+
+定时任务基于 XXL-Job（starter：`broker-spring-boot-starter-job`），任务类一般落在 `broker-orch/*-orch` 的 `job/` 包，写成 `@Component`，不继承框架基类。
+
+### 两段式结构（入口 + 业务）
+
+- **入口方法**标 `@XxlJob("handlerName")`，名字与 XXL-Job 控制台注册的 handler 一致，方法体保持极薄
+- **业务方法**标 `@XxlJobIdempotent(...)` 承载真正逻辑，入参用 `XxlJobReqDTO`（含 `tenantId/startTime/endTime`）
+- 入口通过 `SpringUtil.getBean(本类.class).业务方法(...)` 自调用，确保幂等/AOP 切面生效
+
+```java
+@Component
+public class PortalAgreementTakeDownCompensationJob {
+
+    @XxlJob("portalAgreementTakeDownCompensationJob")
+    public void execute() {
+        SpringUtil.getBean(PortalAgreementTakeDownCompensationJob.class)
+            .compensate(XxlJobReqDTO.builder()
+                .tenantId(TenantContextHolder.getTenantId())
+                .build());
+    }
+
+    @XxlJobIdempotent(jobHandler = "portalAgreementTakeDownCompensationJob",
+            jobName = "门户合约下架消息消费失败补偿",
+            jobTimeUnit = XxlJobTimeUnit.MINUTES)
+    public void compensate(XxlJobReqDTO reqDTO) {
+        // 业务逻辑；重逻辑下沉到 *ServiceImpl
+    }
+}
+```
+
+### 多租户任务
+
+- 需要遍历所有租户执行的任务标 `@TenantJob`（`TenantJobAspect` 会按租户迭代执行），任务体内通过 `XxlJobReqDTO.tenantId` / `TenantContextHolder` 拿到当前租户
+- 不带 `@TenantJob` 的任务自行通过 `XxlJobReqDTO` 显式传 `tenantId`，禁止裸跑导致跨租户
+
+### 日志与产物
+
+- 任务内用 `XxlJobHelper.log(...)` 输出调度日志，结束调 `XxlJobHelper.handleSuccess()` / `handleFail()`
+- 重逻辑委托给 `*ServiceImpl` 的方法（入参 `XxlJobReqDTO`），任务类只做编排
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

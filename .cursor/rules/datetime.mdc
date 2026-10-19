@@ -1,0 +1,78 @@
+---
+description: 日期时间规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 日期时间规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+### 日期格式化
+
+- **禁止硬编码格式字符串** — 必须使用项目中已有的日期格式枚举或常量类，不允许在代码中直接写 `"yyyy-MM-dd HH:mm:ss"` 等魔法值
+- 如果项目中尚无格式枚举/常量，先定义再使用
+
+```java
+// ✅ 正确：使用枚举或常量
+DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DatePattern.NORM_DATETIME_PATTERN);
+DateUtil.format(date, DatePattern.NORM_DATETIME_PATTERN);
+
+// ❌ 错误：硬编码魔法值
+new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+DateTimeFormatter.ofPattern("yyyy-MM-dd")
+```
+
+- **年份用小写 `yyyy`** — 大写 `YYYY` 是 week-based year，跨年周会返回错误年份
+- **大写 M 表示月份，小写 m 表示分钟**
+- **大写 H 表示 24 小时制，小写 h 表示 12 小时制**
+
+### 禁止使用的类
+
+- **禁止 `java.sql.Date`** — 不记录时间，调用 `getHours()` 抛异常
+- **禁止 `java.sql.Time`** — 不记录日期，调用 `getYear()` 抛异常
+- **禁止 `java.sql.Timestamp`** — 构造方法截断精度，与 `java.util.Date` 比较有 JDK BUG
+
+### JDK8+ 推荐用法
+
+| 旧 API | 推荐替代 |
+|--------|---------|
+| Date | Instant |
+| Calendar | LocalDateTime |
+| SimpleDateFormat | DateTimeFormatter（线程安全） |
+
+### 获取时间
+
+- **当前毫秒数** — `System.currentTimeMillis()` 而非 `new Date().getTime()`
+- **纳秒级** — `System.nanoTime()`
+- **统计耗时** — 推荐 `Instant` 类
+
+### 闰年防护
+
+- **禁止硬编码一年 365 天** — 闰年 366 天，会导致数组越界或有效期计算错误
+
+```java
+// ✅ 正确
+int daysOfThisYear = LocalDate.now().lengthOfYear();
+
+// ❌ 错误：闰年出 bug
+int[] dayArray = new int[365];
+calendar.add(Calendar.DATE, 365);
+```
+
+- **闰年 2 月 29 日问题** — 一年后的那天不可能是 2 月 29 日
+- **月份用枚举指代** — `Calendar.JANUARY` 等，Date/Calendar 月份从 0 开始
+
+### 前后端时间格式
+
+- 统一 `yyyy-MM-dd HH:mm:ss`，统一 GMT 时区
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

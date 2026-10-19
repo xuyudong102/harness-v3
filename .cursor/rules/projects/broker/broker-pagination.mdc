@@ -1,0 +1,74 @@
+---
+description: broker 项目分页对象（PageParam / PageResult）使用规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# broker 分页规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/broker/**/*.java,**/broker-*/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 分页接口必须使用框架 `PageResult<T>` + `PageParam`，禁止在 VO 中自行定义 `pageNo/pageSize/total/list` 等分页字段
+
+项目已封装统一分页对象，**禁止在 VO/DTO 中自行定义 `pageNo`、`pageSize`、`total`、`list` 等分页字段**。
+
+### 请求端
+
+- 使用 `com.broker.framework.common.pojo.PageParam`（含 `pageNo`、`pageSize`，自带校验注解）
+- 如需额外查询条件，**继承** `PageParam` 添加业务字段
+- Controller 中可使用 `@ModelAttribute PageParam pageParam` 或 `@RequestParam` 手动接收
+
+```java
+// 推荐：继承 PageParam
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class XxxPageReqVO extends PageParam {
+    @Schema(description = "名称")
+    private String name;
+}
+```
+
+### 响应端
+
+- 使用 `com.broker.framework.common.pojo.PageResult<T>`（含 `list: List<T>` + `total: Long`）
+- Controller 返回类型固定为 `CommonResult<PageResult<XxxVO>>`
+- Service 返回类型固定为 `PageResult<XxxVO>`
+- 空结果使用 `PageResult.empty()`
+
+```java
+// Controller 签名
+CommonResult<PageResult<XxxVO>> getXxxPage(XxxPageReqVO reqVO);
+
+// Service 签名
+PageResult<XxxVO> getXxxPage(XxxPageReqVO reqVO);
+
+// 空结果
+return PageResult.empty();
+// 有数据
+return new PageResult<>(list, total);
+```
+
+### 禁止写法
+
+```java
+// ❌ 禁止：VO 中自行定义分页字段
+public class XxxListRespVO {
+    private List<XxxVO> list;
+    private Integer pageNo;
+    private Integer pageSize;
+    private Long total;
+}
+
+// ❌ 禁止：Controller 返回自定义分页 VO
+CommonResult<XxxListRespVO> getXxxList(...);
+```
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

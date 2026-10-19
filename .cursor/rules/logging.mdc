@@ -1,0 +1,77 @@
+---
+description: 日志规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 日志规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- Service 层关键业务操作必须添加日志——至少在方法入口（INFO 级别，记录关键入参）、异常分支（ERROR/WARN 级别）、调用外部服务前后（DEBUG/INFO 级别）添加日志，方便线上问题排查
+- 关键流程必须有阶段化日志：至少输出“开始/完成/失败”三类日志，并包含 `trace维度字段`（如 traceId、userId、orderNo、skuCount、childOrderCount、耗时）；不得记录原始 Token、凭证或密钥。
+- 并行校验或批量处理必须记录批次日志：输入规模、命中规模、成功/失败数量、失败阶段标识（phase），便于定位性能与数据问题
+- 线上排查所需的关键链路日志必须保持 INFO 级别，禁止通过降级为 DEBUG 来“静音”。具体而言：
+    - API 调用前后、Stream/批量流水处理入口与出口、跨模块 RPC、数据库批量写入等节点，均须 INFO
+    - 方法入口/出口的阶段化日志即使“每次只打 1 条”，也应是 INFO 而非 DEBUG
+    - DEBUG 仅用于开发调试、中间变量追踪；生产关停 DEBUG 后排查链路不得断开
+- 日志过多时的“简化”方式优先级（从高到低）：
+    1. 将同一方法的 `start` + `end` 两条日志合并为出口处单条 INFO，聚合 `入参规模 / 产出规模 / costMs` 等关键字段
+    2. 将循环内逐条 INFO 合并为循环末尾单条聚合 INFO（`requestCount / hitCount / failCount`）
+    3. 仅保留一端（通常是出口/成功路径）的 INFO，起到链路贯穿作用
+    4. 最后才考虑降级；但降级对象必须是“非排查关键路径”，否则违反上一条规则
+- 循环内日志策略：循环内每轮打 INFO 仅当单次循环包含远程 API / 事务写入 / 外部副作用时允许；纯本地装配循环必须在循环结束后打一条聚合 INFO，不得每轮一条
+- 同一文件内耗时字段命名须统一（全文件一致使用 `costMs` 或 `durationMs` 其中之一），便于日志聚合查询
+
+### 异步与恢复路径（风险触发）
+
+仅当 diff 引入或实质改变 MQ、Job、异步处理、重试、补偿、降级、死信、缓存一致性恢复、分布式事务恢复、关键运行路径或 metrics/alerting 时检查：
+
+- 关键失败与恢复状态必须能够被发现、关联、定位并判断影响；需要主动检测时，只有日志不能替代可行动的 metrics/alerts。
+- retry、fallback/degradation、compensation、DLQ 和 partial failure 应提供可区分的运行信号。
+- metrics label 必须有界；不得把 userId、orderId、messageId、traceId 等无界业务标识作为 label value。
+
+### 框架选择
+
+- 使用 **SLF4J** 作为日志门面
+- 声明方式：`private static final Logger log = LoggerFactory.getLogger(Xxx.class);`
+- 或使用 Lombok `@Slf4j` 注解
+
+### 级别规范
+
+| 级别 | 使用场景 |
+|------|---------|
+| ERROR | 系统错误，需要人工介入（如数据库连接失败、外部服务不可用） |
+| WARN | 潜在问题，系统仍可运行（如降级处理、重试成功） |
+| INFO | 关键业务流程节点（如订单创建、支付完成、用户登录） |
+| DEBUG | 调试信息（如方法入参、中间计算结果） |
+
+### 必须遵守
+
+- **禁止 `System.out.println` 和 `e.printStackTrace()`** — 全部使用 SLF4J，生产环境标准输出不会滚动易撑满磁盘
+- **使用占位符 `{}`** — `log.info("User {} logged in", userId)`，禁止字符串拼接（`+`），占位符仅替换不拼接，性能更优
+- **敏感信息脱敏** — 密码、手机号、身份证号等必须脱敏后记录，推荐用订单号/UUID 等唯一编号排查
+- **异常日志** — `log.error("inputParams: {} and errorMessage: {}", params, e.getMessage(), e)` 必须同时传入上下文参数和异常对象
+- **trace/debug/info 级别须做开关判断** — `if (logger.isDebugEnabled()) { logger.debug(...); }`，避免参数中有方法调用（如 `getName()`）造成无谓开销
+- **禁止直接用 JSON 工具将对象转 String 打日志** — 某些 `get` 方法被覆写可能抛异常影响业务流程，应打印业务属性值或调用 `toString()`
+- **避免重复打印日志** — 日志配置中设置 `additivity=false`，避免父子 Logger 重复输出
+- **生产环境禁止 debug 日志** — 有选择输出 info；warn 用于观察日志须注意输出量，避免撑爆磁盘
+- **用户输入参数错误用 warn 级别** — 不要用 error，避免频繁报警；error 只记录系统逻辑错误和重要异常
+- **不要直接使用 Log4j/Logback 的 API** — 必须通过 SLF4J 门面，保持日志实现可替换
+
+### 日志留存与命名
+
+- **应用日志至少保留 15 天** — 部分按周频发的异常需更长窗口排查
+- **安全/操作/监测类日志不少于 6 个月** — 网络运行状态、管理后台操作、用户敏感操作等
+- **扩展日志文件命名** — `appName_logType_logName.log`（如 `force_web_timeZoneConvert.log`）
+- **错误日志优先英文描述** — 英文无法表达清楚时可用中文，避免歧义
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

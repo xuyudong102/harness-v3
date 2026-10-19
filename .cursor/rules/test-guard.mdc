@@ -1,0 +1,71 @@
+---
+description: 测试证据约束；在变更影响业务行为、契约或测试配置时使用
+globs:
+alwaysApply: false
+---
+
+# 测试门禁
+
+## 适用范围
+
+- 适用于改变业务行为、契约或测试配置的代码变更。
+
+## 强制规则
+
+- 改变业务行为的代码变更必须有与实际风险相称的回归证据；单元测试、集成测试、契约检查或受控运行时验证按适用性选择。
+- 项目已有的相关测试和质量门禁不得因本次变更退化；由当前变更造成的失败会阻断 `PASS`。
+- 已接入 JaCoCo check 的项目必须通过项目配置的覆盖率门禁；现行企业基线为行覆盖 ≥ 78%、分支覆盖 ≥ 65%。
+- 不得使用 `@Disabled`、`-Djacoco.skip=true`、删除断言或缩小扫描范围来掩盖当前变更问题，除非用户明确批准临时例外并披露风险。
+- 新行为是否需要先写失败测试由 Agent 根据可复现性、风险和成本选择；完成时仍需证明行为与回归范围。
+- 基线 Flaky Test、外部服务或环境故障应单独归因并披露；不得伪造通过，也不要求自动修复全部范围外问题。
+
+### 触发条件
+
+满足任一条件时，本 Rule 的证据约束适用：
+
+- 变更 `src/main/java` 下业务代码
+- 变更 `src/test/java` 下测试代码
+- 变更被测模块的 `pom.xml` 测试/覆盖率插件配置
+
+仅变更文档、规则、配置模板且未触达上述路径时，可跳过本门禁。
+
+### 可用证据
+
+- 单模块变更：在该模块目录执行
+- 多模块变更：对每个涉及模块分别执行，或在其共同父 POM 目录执行 `-pl mod1,mod2 -am`
+
+| 项目状态 | Maven 命令 | Gradle 命令 |
+|---|---|---|
+| **已接入 JaCoCo check**（`pom.xml` 含 `jacoco-maven-plugin` 的 `check` goal） | `mvn verify -q` | `gradle check`（含 JaCoCo verification） |
+| **仅接入 JaCoCo report**（无 check goal） | `mvn test -q` | `gradle test jacocoTestReport` |
+| **未接入 JaCoCo** | `mvn test -q` 或项目等价检查；如覆盖率是硬验收条件则报告缺口 | `gradle test` |
+
+已接入 JaCoCo 时**禁止**仅用 `mvn test` 代替 `mvn verify` — `test` 阶段不执行覆盖率 check。
+
+#### 覆盖率报告位置
+
+- Maven JaCoCo HTML：`target/site/jacoco/index.html`
+- 构建失败时优先查看 `[ERROR] Rule violated for bundle` 行
+
+#### 业务项目 Maven 接入参考
+
+业务项目（broker / b2cmall 等）须在 BOM（如 `broker-dependencies/pom.xml`）接入 JaCoCo + Surefire 模板：
+
+- 模板片段：`docs/templates/maven-jacoco-surefire.xml`
+- 接入步骤：`docs/templates/maven-test-coverage-integration.md`
+
+### 质量门禁（ERROR 级）
+
+| 门禁项 | 阈值 |
+|---|---|
+| 单元测试通过率 | 100% |
+| 行覆盖率 | ≥ 78% |
+| 分支覆盖率 | ≥ 65% |
+| 新增代码覆盖率 | ≥ 70%（需 SonarQube / diff 覆盖率；本地以模块整体覆盖率为准） |
+
+## 验证清单
+
+- 回归证据覆盖实际改变的行为、关键边界和风险，并对应当前 diff。
+- 项目配置的测试和覆盖率门禁未被绕过或弱化。
+- 失败已正确归因；基线、不可用检查和剩余风险已披露。
+- 没有把 TDD、全量测试或固定测试顺序无条件应用到所有变更。

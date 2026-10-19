@@ -1,0 +1,173 @@
+{
+  "name": "bugfix",
+  "version": 3,
+  "kind": "adaptive-playbook",
+  "control_plane": "current-coding-agent",
+  "intent": "Investigate a defect; fix only when the user authorizes code changes.",
+  "guidance": [
+    "Use relevant issue/repository/runtime facts; investigation and hypothesis depth are chosen by the Coding Agent.",
+    "For authorized fixes make the smallest justified change, using protective tests when useful.",
+    "These are suggestions, not fixed stages or Agent handoffs; completion checks remain mandatory for code changes."
+  ],
+  "optional_capabilities": {
+    "skills": [
+      "skills/systematic-debug",
+      "skills/tdd-bugfix",
+      "skills/quality-review-routing",
+      "skills/codegen-guard"
+    ],
+    "tools": [
+      "repository/Git",
+      "MCP/runtime evidence",
+      "project build/test/lint/schema/API validation"
+    ],
+    "agents": [
+      "agents/issue-context-fetcher",
+      "agents/log-investigator"
+    ]
+  },
+  "completion": {
+    "code_change": {
+      "model": "evidence-contract",
+      "evidence_identity": [
+        "repo",
+        "branch",
+        "HEAD-or-diff-fingerprint",
+        "evidence-type",
+        "result",
+        "applicability",
+        "freshness"
+      ],
+      "freshness_policy": [
+        "evidence remains fresh while its covered code/config and relevant assumptions are unchanged",
+        "review without code/config changes does not stale evidence for the same diff",
+        "later changes stale only evidence whose applicability intersects the changed scope"
+      ],
+      "mechanical_verification": {
+        "required": true,
+        "applicability": "checks selected from the Task Contract, current diff, project configuration and actual risk",
+        "evidence": "current build/test/lint/schema/scanner/runtime facts; unavailable checks disclosed, never fabricated PASS",
+        "reuse": "reuse applicable fresh evidence; run only missing, failed or stale checks"
+      },
+      "integrated_review": {
+        "agent": "agents/integrated-reviewer",
+        "required": true,
+        "context": "read-only review of current diff and available mechanical evidence, separate from implementation",
+        "freshness": "at least one fresh result must match the current diff; it does not impose ordering on other still-fresh evidence",
+        "rerun": "allowed when later code/config changes make prior Integrated Review evidence stale"
+      },
+      "specialists": [
+        {
+          "agent": "agents/security-reviewer",
+          "when": "actual-security-risk-or-integrated-escalation",
+          "optional": true
+        },
+        {
+          "agent": "agents/data-concurrency-reviewer",
+          "when": "actual-data-concurrency-risk-or-integrated-escalation",
+          "optional": true
+        }
+      ],
+      "decision": {
+        "authority": "deterministic",
+        "statuses": [
+          "PASS",
+          "CHANGES_REQUIRED",
+          "HUMAN_REQUIRED"
+        ],
+        "rules": [
+          "current diff causes applicable mechanical evidence required by hard acceptance to FAIL, unresolved code/review BLOCKER, or missing/stale required current-diff review => CHANGES_REQUIRED",
+          "hard-acceptance evidence unavailable because of external environment, permission or infrastructure => HUMAN_REQUIRED or resumable waiting state",
+          "confirmed baseline failure unrelated to current diff and not blocking hard acceptance => preserve WARNING/unverified disclosure; do not require code changes automatically",
+          "otherwise unresolved authority/risk or HUMAN_REQUIRED => HUMAN_REQUIRED",
+          "otherwise PASS; preserve WARNING/ADVISORY and unverified scope"
+        ],
+        "required_specialist_results": "all triggered Specialists must return a terminal result; no AI arbitration",
+        "basis": "Task Contract plus complete, applicable and fresh evidence for the current diff"
+      },
+      "final_verification": {
+        "skill": "skills/done-verify",
+        "required": true,
+        "mode": "evaluate evidence completeness, applicability and freshness",
+        "rerun": "only missing, failed or stale applicable evidence",
+        "artifact_level_independent": true,
+        "unchanged_review_reuses_evidence": true
+      },
+      "done": [
+        "authorized Task Contract and hard acceptance criteria addressed",
+        "decision PASS based on complete, applicable and fresh evidence for the current diff",
+        "report warnings, unavailable checks and evidence gaps; never fabricate completion",
+        "archive only actual durable files after PASS; archive eligibility never replaces evidence"
+      ]
+    },
+    "investigation": {
+      "code_changes": false,
+      "required": [
+        "report evidence, conclusion and uncertainty",
+        "respect read-only authorization"
+      ],
+      "persistent_artifacts": [],
+      "review_required": false
+    }
+  },
+  "artifact_policy": {
+    "default_level": "L1",
+    "required": {
+      "L0": [],
+      "L1": [],
+      "L2": [
+        "task.md"
+      ],
+      "L3": [
+        "task.md",
+        "verification.md"
+      ],
+      "L4": [
+        "task.md",
+        "verification.md"
+      ]
+    },
+    "conditional": [
+      "design.md",
+      "migration.md",
+      "approval",
+      "rollback",
+      "quality/gates/implementation/security.md",
+      "quality/gates/implementation/data-concurrency.md"
+    ],
+    "legacy_bindings": "optional",
+    "archive": {
+      "L0": false,
+      "L1": false,
+      "L2": "on_demand",
+      "L3": true,
+      "L4": true
+    },
+    "level_defaults": {
+      "investigation": "L0",
+      "fix": "L1"
+    }
+  },
+  "bookkeeping": {
+    "L0": [],
+    "L1": [],
+    "durable_resume": "L2 task.md; L3/L4 necessary task/design/verification/evidence only; re-establish repository facts, not phase indices"
+  },
+  "escalation": {
+    "human_approval": [
+      "PRE/PROD operation",
+      "irreversible or destructive DB change",
+      "high-risk migration/rollout",
+      "ambiguous business/permission decision",
+      "security/compliance or explicit organizational approval"
+    ],
+    "risk_level": "L4",
+    "scope": "stop for new authority or materially expanded scope; no mandatory human gate for routine coding"
+  },
+  "legacy_execution": "disabled",
+  "authorization": {
+    "default_for_ones_link_only": "investigation",
+    "diagnosis_is_read_only": true,
+    "fix_requires_explicit_authorization": true
+  }
+}

@@ -1,0 +1,60 @@
+---
+description: Redis 缓存 Key 与使用规范；在处理匹配文件或相关任务时使用
+globs: "**/*Redis*.java,**/RedisKeyConstants.java,**/*RedisDAO.java"
+alwaysApply: false
+---
+
+# Redis 缓存规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*Redis*.java,**/RedisKeyConstants.java,**/*RedisDAO.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- Redis key 必须定义在当前模块的 `RedisKeyConstants` 中；操作必须经 `*RedisDAO` 封装
+- 新增 Redis 用途时，同步更新模块 Redis 规划表（或项目 Redis 登记文档）
+
+### Key 命名
+
+格式：**业务系统名:业务逻辑含义:其它key**
+
+```text
+✅ auth_center:oauth2_access_token:{token}
+❌ token123、cache_user（缺少系统名与语义分层）
+```
+
+- 使用小写与冒号分隔，动态段放末尾
+- 项目内 Key 常量定义在 `dal.redis.RedisKeyConstants`，拼接用 `RedisKeyConstants.join(常量, 动态段...)`
+
+### 使用方式
+
+- **禁止在 Service 中直接注入** `RedisTemplate` / `StringRedisTemplate`
+- Redis 操作封装在 `dal.redis.*RedisDAO`（`@Repository`、`@Slf4j`），Service 注入 DAO
+- 须明确 TTL；禁止无过期时间的临时缓存 key
+- 缓存与 DB 一致性：更新/删除数据时同步失效或更新缓存
+
+### 规划表（提前规划）
+
+项目启动前维护 Redis 使用登记表，至少包含：Key 模式、用途、TTL、所属模块、备注。
+
+### 项目差异
+
+| 项目 | Key 常量落位 | 额外约定 |
+|---|---|---|
+| broker | `{module}/dal/redis/RedisKeyConstants` 接口 | 分布式锁/原子操作 key 可用 hash-tag：`{operate_orch:lock}:%s` |
+| b2cmall | biz 默认 `dal/redis/RedisKeyConstants`；orch 子域可放 `constants/{domain}/*RedisKeyConstants` | 流水号/计数类 key 在首次 `increment` 为 1 时须设置当日或业务窗口过期时间；分布式锁 key 须带业务语义前缀 |
+
+- 复杂对象用 `JsonUtils` 序列化为 String 存储；写入时显式带过期时间
+
+### 禁止行为
+
+- 禁止存储超大 value（大 key 问题）
+- 禁止用 Redis 替代事务或强一致存储
+- 禁止 key 无命名空间导致多服务冲突
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

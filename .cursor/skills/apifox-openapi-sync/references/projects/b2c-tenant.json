@@ -1,0 +1,49 @@
+{
+  "schema": "apifox-openapi-project/v1",
+  "project": {
+    "label": "b2c-tenant",
+    "name": "B2C 商城",
+    "teamId": "207638",
+    "branch": "tenant",
+    "apifoxProjectId": "8911875"
+  },
+  "services": [
+    {
+      "name": "tenant-orch",
+      "aliases": [
+        "tenant"
+      ],
+      "source": {
+        "type": "environment-profile"
+      },
+      "namespace": "tenant-orch-server",
+      "environment": "dev-tenant"
+    }
+  ],
+  "environments": [
+    {
+      "key": "dev-tenant",
+      "name": "DEV-tenant-orch-server",
+      "headers": []
+    }
+  ],
+  "contract": {
+    "allowedPathPrefixes": [
+      "/admin-api/orch-layer/tenant/"
+    ],
+    "forbiddenPathPrefixes": [
+      "/buyer-api/",
+      "/tenant-api/"
+    ]
+  },
+  "runtime": {
+    "manifestIdentity": "b2c-tenant",
+    "environmentProfiles": {
+      "dev-tenant": {
+        "platform": "b2cmall",
+        "environment": "DEV",
+        "service": "b2cmall-tenant-orch"
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+---
+description: b2cmall 项目登录用户/租户上下文获取（SecurityFrameworkUtils / WebFrameworkUtils / TenantContextHolder）约定；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# b2cmall 上下文获取约定
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/com/b2cmall/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 严禁在 Service/Controller 业务逻辑里直接 `request.getHeader("tenant_id")` 手读上下文；统一走框架工具类
+
+### 登录用户（业务/服务层）
+
+用 `com.zfn.framework.security.core.util.SecurityFrameworkUtils`：
+
+```java
+LoginUser user = SecurityFrameworkUtils.getLoginUser();
+Long userId = SecurityFrameworkUtils.getLoginUserId();
+```
+
+- `LoginUser` 取用户主键是 `getUserId()`，引用前先核对方法名
+- 网关层另有同名工具类，仅限 gateway filter 使用；业务/orch/biz 代码用 `com.zfn.framework.*` 这套
+
+### Web 请求信息
+
+用 `com.zfn.framework.web.core.util.WebFrameworkUtils`（仅在 Web/接入层需要原始请求信息时）：
+
+```java
+Long tenantId = WebFrameworkUtils.getTenantId(request);
+boolean isRpc = WebFrameworkUtils.isRpcRequest(request);
+```
+
+- header 名使用框架常量，**禁止**业务里写裸字符串读 header
+
+### 租户上下文
+
+用 `com.zfn.framework.tenant.core.context.TenantContextHolder` 与 `TenantUtils`：
+
+```java
+Long tenantId = TenantContextHolder.getTenantId();
+Long required = TenantContextHolder.getRequiredTenantId();
+
+TenantUtils.execute(tenantId, () -> { /* 指定租户内执行 */ });
+TenantUtils.executeIgnore(() -> { /* 忽略 MyBatis 租户过滤 */ });
+```
+
+- MQ 消费 / 定时任务 / 三方回调等无上下文场景，按显式 `tenantId` 用 `TenantUtils.execute(...)` 恢复
+- 跳过租户过滤不等于允许跨租户查业务数据 —— 仍须按显式 `tenantId` 做租户内隔离
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

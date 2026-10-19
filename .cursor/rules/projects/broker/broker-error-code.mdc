@@ -1,0 +1,59 @@
+---
+description: broker 项目错误码落位与 ServiceException 抛出约定；在处理匹配文件或相关任务时使用
+globs: "**/broker-modules-api/**/enums/ErrorCodeConstants.java,**/broker-modules-biz/**/constant/ErrorCodeConstants.java"
+alwaysApply: false
+---
+
+# broker 错误码与异常抛出
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/broker-modules-api/**/enums/ErrorCodeConstants.java,**/broker-modules-biz/**/*.java,**/broker-orch/**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 错误码 `message` 仅供开发排查与日志，禁止作为面向用户的唯一提示；终端文案走统一响应的提示字段
+
+> 本文件只约束 broker 工程内的「错误码放哪、怎么抛、怎么查重」。错误码十位四段编号规则属通用规范，不在此重复。
+
+### 错误码定义位置
+
+- 业务错误码定义在**对应 `broker-module-*-api` 模块**的 `enums/ErrorCodeConstants` 接口中（多子域模块按子域各有一个，如 account/infoconfig 各自维护）
+- biz 与 orch 层**只引用、不重定义**这些常量
+- orch 层自身的编排错误码可放本 orch 模块的 `enums/ErrorCodeConstants`
+
+```java
+// broker-module-settlement-api/.../enums/ErrorCodeConstants.java
+public interface ErrorCodeConstants {
+    // ============ 订单模块 1_202_004_XXX ============
+    ErrorCode UPDATE_ORDER_IDEMPOTENT = new ErrorCode("订单模块", 1_202_004_005, "订单数据幂等校验异常！");
+}
+```
+
+- 使用 `com.broker.framework.common.exception.ErrorCode` 的三参构造 `(String moduleName, int code, String message)`
+- 每段号段用注释 banner 标注占用范围，便于查空位
+
+### 抛异常方式
+
+统一静态导入 `ServiceExceptionUtil.exception`，**禁止** `throw new RuntimeException("...")` 或裸 `ServiceException`：
+
+```java
+import static com.broker.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static com.broker.module.settlement.enums.ErrorCodeConstants.UPDATE_ORDER_IDEMPOTENT;
+
+throw exception(UPDATE_ORDER_IDEMPOTENT);
+throw exception(ErrorCodeConstants.XXX, param1, param2); // message 中 {} 占位
+```
+
+- 全局异常被 `com.broker.framework.web.core.handler.GlobalExceptionHandler` 统一转 `CommonResult.error(code, message)`，业务代码无需自己拼响应体
+
+### 号段登记与查重
+
+- 新增模块号段先在 `com.broker.framework.common.exception.enums.ServiceErrorCodeRange` 登记区间（该接口只声明区间、不实际使用），再到模块 `ErrorCodeConstants` 定义具体码
+- 多数 `ErrorCodeConstants` 带 `main()` 调 `ErrorCode.checkErrorcode(ErrorCodeConstants.class)` 做全局唯一性校验；新增错误码后应跑一次确认无重复
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

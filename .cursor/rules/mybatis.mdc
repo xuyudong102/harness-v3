@@ -1,0 +1,113 @@
+---
+description: ORM 与 MyBatis 映射规范；在处理匹配文件或相关任务时使用
+globs: "**/*Mapper*.java,**/*Mapper*.xml,**/mapper/**/*.xml"
+alwaysApply: false
+---
+
+# ORM 映射规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*Mapper*.java,**/*Mapper*.xml,**/mapper/**/*.xml` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+- 编写 Mapper/SQL 前须 Read 对应 `*DO.java` 确认物理字段是否存在、类型与所在表
+- `in` 条件集合元素控制在 **1000** 以内；超过须分批或改查询方式
+
+### 查询与结果映射
+
+- **禁止 `SELECT *`** — 明确列出字段
+- **禁止用 HashMap/Hashtable 接收查询结果** — 须用 `<resultMap>` 或明确 POJO
+- 每个表须有对应 `<resultMap>`，禁止仅用 `resultClass`
+
+### 参数与 SQL 安全
+
+- XML 中参数使用 **`#{}`** — 禁止 `${}` 拼接，防 SQL 注入
+- 动态 SQL 须判空，避免生成非法语句
+
+### 更新规范
+
+- **禁止大而全的 update** — 只更新有改动的字段，避免误更新与 binlog 膨胀
+- **`@Transactional` 不滥用** — 须考虑缓存回滚、消息补偿等副作用
+
+### 布尔字段映射
+
+- 数据库是否字段**不使用 `is_` 前缀**，类型 `bit(1)`（0=否，1=是），如 `deleted`、`enabled`；Entity 布尔属性**同样不加 `is` 前缀**
+- 列名与 Entity 属性名一致时可直接映射；无需额外 `is_xxx` → `xxx` 转换
+- 若对接遗留库存在 `is_xxx` 列，须在 `<resultMap>` 中显式映射到 Entity 属性（如 `is_deleted` → `deleted`）
+
+### 类型匹配
+
+- DO 属性类型与数据库字段一一对应 — `bigint` 对应 `Long`，禁止用 `Integer` 存大 id
+- 禁止 `float`/`double` 存金额；金额用 `decimal`，小数位按业务（通常 8 位）
+
+### 禁止行为
+
+- 禁止存储过程、函数、视图作为常规 CRUD 路径
+- 禁止 MySQL `WITH RECURSIVE` — 递归由程序处理
+- 数据订正（delete/update）前须 **先 select 确认**
+
+### SQL 片段（`<sql>` / `<include>`）
+
+**默认原则：少封装、写完整。** 每条 `<select>` / `<update>` / `<delete>` 内应能直接读出完整 SQL；动态条件用 `<where>` + 内联 `<if>` / `<choose>`，**不拆 `<sql>` 片段**。
+
+#### 允许（例外，从严）
+
+仅当**同一 Mapper 内 ≥3 个方法**引用且内容**完全不变**时，才允许 `<sql>` + `<include>`：
+
+| 片段类型 | 示例 | 限制 |
+|---------|------|------|
+| 固定列清单 | `Base_Column_List` | 仅列名，不含条件 |
+| 固定 JOIN | 多表关联且列/条件均不变 | 不含动态 `<if>` |
+
+除此以外一律**禁止**新建 `<sql>` 片段。
+
+#### 禁止
+
+- **禁止为单条或 2 条查询拆 `<sql>` 片段** — 直接写在 `<select>` 内
+- **禁止把 `WHERE` / `FROM` / `ORDER BY` 拆成独立片段再 `<include>`** — 读一条 SQL 须跳转多处
+- **禁止在条件块（`WHERE` / `ON` / `HAVING`）内 `<include>` 注入动态条件**
+- **禁止 `<sql>` 内再嵌套 `<include>`** — 片段层级过深
+
+```xml
+<!-- ❌ 禁止：拆 WHERE 片段 + include 注入条件 -->
+<sql id="PageByUserWhere">...</sql>
+<select id="pageByUser">
+    SELECT ... <include refid="PageByUserWhere"/>
+</select>
+```
+
+#### 推荐写法
+
+条件与主体 SQL **同处一个 `<select>`**，无需 `<include>`：
+
+```xml
+<!-- ✅ 推荐：完整 SQL 在一处 -->
+<select id="pageByUser" resultMap="CouponUserMap">
+    SELECT cu.id, cu.user_id, cu.status, cu.expire_time
+    FROM coupon_user cu
+    <where>
+        cu.deleted = 0
+        AND cu.user_id = #{req.userId}
+        <if test="req.statusTab == 'UNUSED'">
+            AND cu.status = 0 AND cu.expire_time &gt; NOW()
+        </if>
+        <if test="req.statusTab == 'USED'">
+            AND cu.status = 1
+        </if>
+        <if test="req.statusTab == 'EXPIRED'">
+            AND cu.status = 0 AND cu.expire_time &lt;= NOW()
+        </if>
+    </where>
+    ORDER BY cu.id DESC
+</select>
+```
+
+多方法共享条件时，**复制内联 `<if>` 块**优于拆成不可追踪的 include 链；若条件确实完全相同且 ≥3 处引用，再评估是否提取为 Java 层 Query 对象或单条可读的 `<sql>`（仅列清单/JOIN，不含 WHERE）。
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

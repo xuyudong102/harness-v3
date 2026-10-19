@@ -1,0 +1,46 @@
+---
+description: Java 数值类型规范（BigDecimal / 浮点 / Integer）；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 数值类型规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+### BigDecimal
+
+- **禁止 `new BigDecimal(double)`** — 存在精度损失，`new BigDecimal(0.1F)` 实际值为 0.1000000014901...
+
+```java
+// ✅ 正确
+BigDecimal a = new BigDecimal("0.1");
+BigDecimal b = BigDecimal.valueOf(0.1);
+
+// ❌ 错误
+BigDecimal c = new BigDecimal(0.1);
+```
+
+- **等值比较用 `compareTo()`** — `equals()` 会比较精度，`1.0` 与 `1.00` 返回 false
+- **货币金额以最小单位整型存储** — 如用 `Long` 存分而非 `BigDecimal` 存元
+
+### 浮点数比较
+
+- **基本类型不能用 `==`，包装类型不能用 `equals`**
+- 方案一：指定误差范围 `Math.abs(a - b) < 1e-6F`
+- 方案二：使用 BigDecimal 运算后 compareTo
+
+### Integer 比较
+
+- **全部使用 `equals()`** — -128~127 范围内 `==` 可用（IntegerCache），超出范围 `==` 返回 false
+- DO 类属性类型须与数据库字段类型一一匹配 — bigint 对应 Long，不能用 Integer
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

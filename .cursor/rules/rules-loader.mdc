@@ -1,0 +1,171 @@
+---
+description: 规则发现索引；在 Workflow 或 Agent 需要查找专项规则时按需读取
+globs:
+alwaysApply: false
+---
+
+# 规则发现索引
+
+## 适用范围
+
+- 仅在 Workflow 显式引用，或 Agent 需要查找某个技术/项目 Rule 时读取。
+
+## 强制规则
+
+> **架构原则**：规则文件互不引用，每条规则自描述本领域约束。可能相关的规则由本索引与高精度 globs 提示，实际读取由 Coding Agent 决定；纠正写入路由见 `correction-detection.mdc` 与 `memory-consolidator`。
+
+默认 Context 只常驻核心执行边界。其他 Rule 在设计或修改对应代码时按需读取，不得在任务开始时批量加载。
+
+> 自 2026-06 起 `.cursor/rules/` 已扁平化（无 `memory/`、`feedback/`、`orchestration/`、`execution/` 子目录），所有 `.mdc` 直接位于 `rules/` 根。
+
+### Hook 辅助发现（非 Workflow 也生效）
+
+编码类任务由 `.cursor/hooks/` 提供短索引和确定性安全检查：
+
+| Hook | 时机 | 行为 |
+|---|---|---|
+| `beforeSubmitPrompt` | 用户发送编码相关消息 | 只向 `additional_context` 注入可能相关的 Rule 路径，不注入正文 |
+| `preToolUse` | 写文件或执行命令 | 放行普通 DEV/SIT 开发；阻断只读请求中的写入、PRE/PROD 变更和破坏性命令 |
+| `sessionStart` | 新会话 | 清理过期注入状态 |
+
+收到 `[Harness Rule Discovery]` 时，其中只有路径索引。仅读取对当前变更真正必要的 Rule，无需输出规则加载报告。
+
+playbook 仅提供按需参考，不自动加载规则清单或启动阶段；Hook Discovery 提示可能相关的路径，当前 Coding Agent 自主读取。
+
+### 加载流程
+
+1. 使用 Hook 索引、本表和 Rule frontmatter `globs` 确定候选。
+2. 结合实际变更文件与技术边界缩小集合；仅用普通关键词命中不等于必须读取。
+3. 在首次设计或修改对应领域代码前读取必要 Rule；已读且未变更时不重复加载。
+4. 项目特化 Rule 依然由其 `globs` 隔离，不得因精简 Context 而用通用经验代替项目事实。
+
+### 场景加载指引
+
+> 与 `correction-detection.mdc`、`agents/memory-consolidator.md` 的分类表保持同步,三处任一处新增分类时必须同步更新。
+
+| 任务场景 | 候选规则（按实际变更按需读取） |
+|---|---|
+| 编写/修改 Java 代码 | `null-safety` `naming` `method-design` `collections` `exceptions` `comments` `code-style-format` `control-flow` `oop` `numeric` `constants` `enums` `java-edit-self-check` |
+| 涉及枚举类/枚举字段 | `enums` `naming` `comments` `pojo` |
+| 涉及数据库/Entity/Mapper | `database` `schema-guard` `mybatis` |
+| 涉及 ER 图绘制/DDL 设计文档 | `er-diagram` |
+| 涉及 API/Controller | `api-design` `security` `error-codes` `enums` |
+| 涉及多租户/跨租户数据访问/`ignore-urls`/`ignore-tables`/MQ 或三方回调接入 | `tenant-isolation` `message-queue` |
+| 涉及并发/多线程 | `concurrency` |
+| 涉及日期时间处理 | `datetime` |
+| 涉及日志 | `logging` |
+| 涉及 DTO/VO/Entity 设计 | `pojo` `enums` |
+| 涉及测试代码 | `testing` |
+| 涉及依赖/pom.xml | `dependencies` |
+| 涉及项目结构变更 | `project-architecture` `microservice` `design-doc` |
+| 涉及 Redis 缓存 | `redis` |
+| 涉及 OBS/对象存储/文件上传下载 | `obs` |
+| 涉及应用安全/权限/脱敏/CSRF | `security` |
+| 涉及 Git 分支、更新与冲突恢复 | `git-branch` |
+| 涉及 Git 提交 | `git-commit` |
+| 涉及仓库初始化/.gitignore/提交前仓库卫生检查 | `repository-hygiene` |
+| 涉及变更实施流程/渐进式改动 | `change-implementation` |
+| 涉及任务拆解/子任务规划 | `task-decomposition` |
+| 涉及子代理产物交接 | `stage-contracts` |
+| 涉及 MCP 配置/代理引用 MCP | `mcp` |
+| 代码审查 | `naming` `method-design` `exceptions` `logging` `comments` `scope-guard` `error-codes` `oop` `enums` `constants` |
+| 涉及概要/详细设计文档 | `design-doc` |
+| 涉及错误码定义 | `error-codes` `api-design` |
+| 涉及规则文件维护/新增 .mdc | `cross-ref-guard` |
+
+多个场景重叠时,合并加载所有相关规则。
+
+### 映射表维护
+
+只有希望 Hook 在普通编码 Prompt 中提示某条 Rule 时，才需要把它登记到上方发现表。Workflow 或 Agent 直接引用的 Rule 不要为了“全覆盖”加入 Prompt routing。
+
+#### Hook 场景同步（与 `rules-engine.mjs` 双份维护）
+
+以下两处必须**同步变更**，否则 Hook 发现索引会漏掉候选路径或场景不命中：
+
+| 维护位置 | 维护内容 |
+|---|---|
+| 本文件「场景加载指引」表 | 任务场景描述 ↔ 规则文件名列表 |
+| `.cursor/hooks/lib/rules-engine.mjs` | `SCENE_DETECTORS`（何时命中）↔ `SCENE_TO_ROW`（映射到上表「任务场景」列文案） |
+
+**强制约定：**
+
+1. 场景表**每一行**「任务场景」须至少有一个 `SCENE_TO_ROW` 条目指向它（`tenant` 与 `mq` 可共用一行）
+2. `SCENE_DETECTORS` 与 `SCENE_TO_ROW` 的 **key 集合必须完全一致**（一一对应）
+3. 新增场景：先改本表 → 再改 `rules-engine.mjs` → 运行 `.cursor/scripts/check-rule-routing-sync.ps1`
+4. 场景表只是发现索引，不要求覆盖所有通用 Rule
+
+校验命令：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .cursor/scripts/check-rule-routing-sync.ps1
+```
+
+```bash
+bash .cursor/scripts/check-rule-routing-sync.sh
+```
+
+### 项目特化规则加载约定
+
+当某条规则只对特定业务项目（而非 harness 通用层）适用时，按以下约定组织：
+
+#### 物理位置
+
+```
+.cursor/rules/
+  <topic>.mdc                      ← 通用规则（当前 49 条，全部位于 rules/ 根，扁平化）
+  projects/                        ← 仅按"项目作用域"分组，承载项目特化规则
+    <project-1>/
+      <project-1>-<topic>.mdc      ← 项目 1 特化规则（文件名带项目前缀便于识别）
+    <project-2>/
+      <project-2>-<topic>.mdc
+    <project-3>/
+      ...
+```
+
+`projects/<name>/` 内部**不再嵌套**任何"类型/阶段"子目录，只按项目作用域聚合。
+
+#### 命名约定
+
+- 文件名必须带 `<project>-` 前缀（例：`broker-mq-event.mdc`），便于 ls 时一眼识别归属；命名遵循通用规则同样的"去冗余后缀"风格（不加 `-conventions` / `-handling` / `-management`）
+- 同一项目内的多条特化规则按主题切分文件，单条规则不写"大杂烩"
+
+#### 加载/隔离机制
+
+业务项目通过 `link-cursor-config.ps1` link 后会看到所有 `projects/*`。项目目录名用于 Discovery 归属；仅高精度 Auto Attached Rule 使用 `globs`：
+
+```yaml
+---
+description: <project> 项目 <topic> 约定
+globs: "**/com/<project>/**/mq/**/*.java"
+alwaysApply: false
+---
+```
+
+强制约束：
+- 默认使用空 `globs`，由 Hook 根据项目路径提示该项目候选 Rule，Agent 再按任务选择。
+- Mall 的 `repos/b2c/backend/` 多仓工作区对应 `projects/b2cmall/`；根目录任务无需先打开 Java 文件即可发现该项目候选 Rule，不匹配 Broker、Yunshang 或 B2C frontend。
+- 使用非空 `globs` 时，至少一条必须命中项目专有且高精度的路径特征。
+- **禁止使用 `alwaysApply: true`**——项目特化规则不应在所有项目无差别加载
+- **禁止 globs 写 `**/*.java` 这类无差别匹配**
+- 多个 glob 必须写为带引号的单行标量，不使用 YAML 列表。
+
+#### 跨项目共享但非全局的规则
+
+例如 broker 与 btoc 都需要、admin 不需要的规则：
+
+| 选项 | 适用 |
+|------|------|
+| **复制到两个 projects/ 下** | 推荐。短期一致长期会分化，复制让分化代价为零 |
+| **抽到 `rules/` 根，globs 同时匹配两项目路径** | 仅当三个项目以后都会用且只是路径模式差异 |
+| **新增 `projects/_shared-<域>/`** | 不推荐，二级共享分组会让加载语义复杂化 |
+
+#### 与场景表的关系
+
+上方场景表只描述**通用规则**。Hook 根据当前文件路径识别项目并列出该项目 Rule；其中非空高精度 `globs` 可由 IDE Auto Attach，其余由 Agent 按需读取。
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。

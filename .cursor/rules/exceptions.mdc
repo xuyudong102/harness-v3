@@ -1,0 +1,64 @@
+---
+description: 异常处理规范；在处理匹配文件或相关任务时使用
+globs:
+alwaysApply: false
+---
+
+# 异常处理规范
+
+## 适用范围
+
+- 当引用、读取或修改匹配 `**/*.java` 的文件，或任务语义明确涉及本规则领域时适用。
+
+## 强制规则
+
+### 基本原则
+
+1. **禁止空 catch** — 所有 catch 块必须有日志记录或重新抛出
+2. **异常信息必须包含上下文** — 包括操作名称、关键参数值、失败原因
+3. **不要用异常控制流程** — 异常只用于异常情况，不用于正常业务分支
+
+### Checked vs Unchecked
+
+- **Checked Exception** — 仅用于调用方可合理恢复的场景
+- **Unchecked Exception（RuntimeException）** — 用于编程错误或不可恢复的业务异常
+
+### 自定义异常继承体系
+
+> ⚠️ 待适配具体项目
+
+```
+BaseException (RuntimeException)
+├── BusinessException     — 业务规则校验失败
+├── NotFoundException     — 资源不存在
+├── UnauthorizedException — 认证/授权失败
+└── SystemException       — 系统级异常（外部服务、基础设施）
+```
+
+### 禁止行为
+
+- 禁止 `catch (Exception e) {}` 空处理
+- 禁止 `e.printStackTrace()`，使用日志框架
+- 禁止在循环内 try-catch（除非有明确理由）
+- 禁止吞掉异常后返回 null
+- 禁止在 finally 块中使用 return — try 中的返回值会被 finally 的 return 覆盖
+
+### AI 易忽略的异常处理规则
+
+- **RuntimeException 通过预检查规避** — 如 `NullPointerException` 通过 `Objects.nonNull()` 等规避，不通过 catch 处理
+- **异常不用于流程控制** — 异常处理效率远低于条件判断
+- **catch 要区分异常类型** — 对大段代码统一 `catch(Exception)` 是不负责任的，须按异常类型分别处理
+- **RPC/二方包/动态类调用用 Throwable 捕获** — `catch(Exception)` 无法拦截 `NoSuchMethodError` 等 Error，须用 `catch(Throwable)`
+- **事务中异常被 catch 后须手动回滚** — `catch` 后若需回滚事务，必须显式 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()` 或重新抛出
+- **finally 必须关闭资源** — 资源对象、流对象在 finally 中关闭；JDK7+ 优先使用 try-with-resources
+- **异常信息须包含案发现场** — `log.error("inputParams: {} and errorMessage: {}", params, e.getMessage(), e)` 同时保留参数和堆栈
+- **方法返回 null 时须注释说明** — 何种情况返回 null，调用方有责任判空
+- **分层异常处理** — DAO 层 `catch(Exception)` 转为 `DAOException` 向上抛不打日志；Service 层必须记录日志；Web 层不再向上抛，转为友好错误页面；开放接口层转为统一 `ErrorCode` 常量抛出
+- **【推荐】区分 unchecked/checked** — 禁止直接 `throw new RuntimeException()` 或裸 `Exception`/`Throwable`；使用有业务含义的自定义异常（如 `ServiceException`）
+- **【参考】跨应用 RPC 优先 Result**（isSuccess + 错误码 + 简短信息）；应用内部推荐抛异常
+
+## 验证清单
+
+- 确认本规则适用范围内的强制约束均已落实。
+- 确认没有出现本规则明确禁止的行为。
+- 确认代码、配置或制品与本规则中的示例和领域约定一致。
